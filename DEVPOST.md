@@ -4,6 +4,19 @@
 
 **Tagline:** Checkout you can hear: voice-first shopping and PayPal payments for blind and low-vision shoppers.
 
+**Elevator pitch:** Most shopping agents are built to act *for* you. EchoCart is built so you can *trust* what it does. It reads back exactly what you'll pay, and PayPal is only charged after a clear "yes" to that total. Blind shoppers can buy, change, reorder and refund by voice, with the screen off, from one button.
+
+### What makes it different
+
+| Typical voice shopping agent | EchoCart |
+|---|---|
+| Fills the cart, then sends you to a visual payment page | Links PayPal once (PayPal Vault); every later checkout is voice-only |
+| Trusts the AI's numbers | The AI only picks products; every price, total and refund amount comes from the backend |
+| Any "ok" can trigger a purchase | Money moves only on "yes", "yes, pay" or "confirm", straight after the exact total is spoken, and each yes works once |
+| No guard against mistakes | A per-order spending limit the shopper sets by voice; raising it needs a yes |
+| Refunds mean calling support | "Refund just the batteries" gives a partial refund through PayPal Payments v2, spoken back first |
+| Accessibility added at the end | Designed with screen readers first: live regions, earcons and vibration, a "let my screen reader speak" mode, no timeouts |
+
 ---
 
 ## Inspiration
@@ -18,7 +31,12 @@ Voice assistants can fill a cart, but most of them still hand you to a visual pa
 - **EchoCart reads the cart back:** items, quantities, total in lei and in euros, delivery date. Then it asks: *"Say yes to pay, or tell me what to change."*
 - **Change anything by voice:** "remove the batteries", "make it three", "cheaper option", "add some sponges". Each change is read back again and needs a new yes.
 - **Say "yes" and it pays with PayPal**, then speaks the receipt: order number, amount charged, delivery date. A success chime confirms it.
-- **"Refund my last order"** reads back what will be refunded, asks for a yes, refunds through PayPal and confirms aloud.
+- **"Refund my last order"**, or **"refund just the batteries"**, reads back what will be refunded and the amount, asks for a yes, refunds through PayPal (fully or partly) and confirms aloud.
+- **"Same as last time"** rebuilds the last order with today's prices and stock, then reads it back. Ordering your usual essentials takes one sentence and one yes.
+- **"Where's my order?"** and **"what did I order?"** read back delivery dates and recent orders.
+- **"How much is coffee?"** and **"what tea do you have?"** answer without touching the cart.
+- **"Set my spending limit to 100 lei"** stops EchoCart paying for any order above it. Lowering the limit takes effect at once; raising or removing it needs a yes.
+- **"Unlink my PayPal"** deletes the saved PayPal account through PayPal's Vault API, after a yes.
 - **"Repeat", "help" and "cancel"** work at every step, with no timeouts.
 
 You link your PayPal account **once**, in a popup that EchoCart talks you through. After that, checkout is entirely by voice.
@@ -28,7 +46,8 @@ You link your PayPal account **once**, in a popup that EchoCart talks you throug
 **PayPal (sandbox):**
 - **Vault v3 (payment method tokens).** A setup token is approved once by the shopper in a PayPal popup, then exchanged for a saved payment token. This is what removes the visual approval step from every later purchase.
 - **Orders v2.** Each purchase is created with `payment_source.paypal.vault_id` and `intent: CAPTURE`. If PayPal returns the order as approved but not yet captured, EchoCart captures it explicitly.
-- **Payments v2.** `POST /v2/payments/captures/{id}/refund` for voice refunds.
+- **Payments v2.** `POST /v2/payments/captures/{id}/refund` for voice refunds, both full and partial (with an amount). For partial refunds, EchoCart works out each line's amount and refunds the exact remainder last, so rounding never adds up to more than was charged.
+- **Vault v3 delete.** `DELETE /v3/vault/payment-tokens/{id}` when the shopper says "unlink my PayPal".
 - **Fallback.** If a sandbox app doesn't have Vault enabled, EchoCart switches to PayPal's standard approval page in a popup and narrates each step. Judges can run it either way.
 - **Currency.** PayPal REST doesn't support RON (Romanian lei), so carts are priced in lei and charged in EUR at a fixed demo rate. Both amounts are spoken.
 - **Audit log.** Every create, capture and refund is logged with a timestamp and order id.
@@ -54,17 +73,18 @@ The safety rules are enforced in code, not left to the AI's instructions:
 
 - **A yes counts only straight after the backend has spoken the exact total**, and only "yes", "yes, pay" or "confirm" are accepted. "Yeah", "yes please", "ok" and everything else count as no; EchoCart reads the cart again and asks for a clear yes.
 - **Each yes is single-use and tied to a fingerprint of the cart that was read back.** If the cart changes, or anything else is said in between, the yes no longer counts.
-- **Refunds have their own read-back and yes.** A payment yes can't authorise a refund.
+- **Refunds, unlinking PayPal, and raising or removing the spending limit** each have their own read-back and yes. A yes given for one can't authorise another.
+- **The spending limit is checked twice:** an over-limit cart is never offered for a yes, and the payment step checks again.
 - **A second order can't be created** while one is waiting for approval in the fallback popup.
 
-These rules are covered by unit tests, alongside 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
+These rules are covered by 71 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
 
 ## Accessibility choices
 
 - **One primary control:** a large, labelled Talk button, also triggered by Space. Escape stops speech.
 - **Live regions:** everything spoken is also written to an `aria-live` region, polite for updates and assertive for errors and payment results. Screen readers and braille displays get the same information as the voice.
 - **"Let my screen reader speak":** turns off EchoCart's own voice so it doesn't talk over NVDA or VoiceOver. There's also an adjustable speech rate and a choice of recognition language (English or Romanian).
-- **Earcons:** short tones for listening started, listening stopped, success and error, so you know what's happening without words.
+- **Earcons and vibration:** short tones for listening started, listening stopped, success and error, so you know what's happening without words. On phones they come with matching vibration patterns, for shoppers who are also hard of hearing.
 - **The PayPal window opens on a key press.** Browsers block popups that aren't triggered by the user, so EchoCart says "press Enter" and moves focus to the right button. The page you return to announces the result and closes itself.
 - **WCAG 2.2 AA as the floor:**
   - full keyboard operation
@@ -101,7 +121,8 @@ These rules are covered by unit tests, alongside 30 recorded-style utterances: b
 - **Testing with blind and low-vision shoppers**, and changing the wording and pacing based on what they tell us.
 - **Real shop catalogues** instead of a demo catalogue, and grocery delivery slots.
 - **Fraud-prevention data and production vetting** for saved PayPal accounts.
-- **Spending limits per order**, spoken order tracking ("where's my order?"), and reordering ("the same as last week").
+- **Real delivery tracking** through PayPal's shipment tracking API, replacing the delivery estimate.
+- **A trusted-contact option:** an optional second confirmation by a family member above a set amount.
 - **A phone-call channel**, so shoppers can use it without a browser at all.
 
 ## Built with

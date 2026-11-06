@@ -36,7 +36,8 @@ EchoCart is designed around three things a blind shopper needs to trust a paymen
 - **PayPal:**
   - **Vault v3:** a one-time setup token. The shopper approves it in a PayPal popup, and it becomes a saved payment token (`vault_id`).
   - **Orders v2:** each order is created with `payment_source.paypal.vault_id`, so no approval page is needed. EchoCart captures the order explicitly if PayPal hasn't already.
-  - **Payments v2:** refunds go to `POST /v2/payments/captures/{id}/refund`.
+  - **Payments v2:** refunds go to `POST /v2/payments/captures/{id}/refund`, either full or partial (with an amount). The last partial refund uses the exact remainder, so rounding never refunds more than was charged.
+  - **Vault v3 delete:** "unlink my PayPal" calls `DELETE /v3/vault/payment-tokens/{id}`.
 - **Currency:** PayPal REST doesn't support Romanian lei (RON). Carts are priced in lei and charged in **EUR at a fixed demo rate** (`EUR_PER_RON`). Both amounts are spoken: *"Total 45 lei 80 bani, charged as 9 euros 21 cents."*
 - **Fallback:** if the sandbox app can't save PayPal accounts (Vault not enabled), EchoCart opens PayPal's standard approval page in a popup for each payment instead, and says what to do at each step.
 
@@ -46,7 +47,8 @@ EchoCart is designed around three things a blind shopper needs to trust a paymen
 |---|---|
 | Money moves only after "yes", "yes, pay" or "confirm", said right after the backend spoke the exact total | `safety.ConfirmationGate`, `dialog.Conversation._say` |
 | If the cart changes, or anything else is said, the yes no longer counts; a new read-back and a new yes are required | `ConfirmationGate.consume` checks the cart fingerprint; every non-read-back reply disarms it |
-| Refunds need their own read-back and yes. A yes given for a payment can't approve a refund | `ConfirmationGate` kinds `payment` / `refund` |
+| Refunds, unlinking PayPal, and raising or removing the spending limit each need their own read-back and yes. A yes given for one can't approve another | `ConfirmationGate` kinds `payment` / `refund` / `unlink` / `limit` |
+| An order over the spending limit is never offered for a yes, and the payment step checks the limit again | `dialog.Conversation._propose`, `_pay` |
 | LLM output that fails the schema, names an unknown product id, or goes over budget is never shown | `safety.validate_llm_output` |
 | Prices come from `catalog.json`, never from the LLM | `cart.price_cart` |
 | Every create, capture and refund is logged with a timestamp and order id | `data/payments.jsonl` (`paypal_client.PaymentLog`) |
@@ -137,8 +139,12 @@ All settings come from environment variables or `.env`.
 | "no" | Doesn't pay. The cart stays. |
 | "repeat", "read my cart" | Says the last thing again, or reads the cart back. |
 | "cancel" | Empties the cart. |
-| "refund my last order" | Reads back what will be refunded and asks for a yes. |
-| "link PayPal" | Starts the one-time account link. |
+| "refund my last order", "refund just the batteries" | Reads back what will be refunded and the amount, then asks for a yes. Partial refunds go through PayPal with an amount. |
+| "same as last time", "order it again" | Rebuilds your last order with today's prices and reads it back. |
+| "where's my order?", "what did I order?" | Delivery date of your last order; your last three orders. |
+| "how much is coffee?", "what tea do you have?" | Prices and options. The cart doesn't change. |
+| "set my spending limit to 100 lei", "what's my limit?", "remove my spending limit" | EchoCart won't pay for an order above the limit. Lowering it is immediate; raising or removing it needs a yes. It can also be set in Settings. |
+| "link PayPal", "unlink my PayPal" | Starts the one-time account link, or deletes the saved account after a yes. |
 | "help" | Lists these commands. |
 
 Keyboard: **Space** starts or stops listening, and **Esc** stops EchoCart talking. Every reply also appears in the page's live regions and in the conversation log.
@@ -178,13 +184,14 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 51 tests:
+The suite has 71 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
 - **Safety rules** (`test_safety.py`): no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
 - **30 spoken requests** (`tests/fixtures/utterances.json`) run against the offline parser, covering budgets, "double a", Romanian names, an over-budget case, out of stock, unclear requests and edits. `test_llm.py` also covers the Claude client against a mocked API.
 - **PayPal against a mocked API** (`test_paypal_mock.py`): the vault flow, the audit log, and the sandbox-only guard.
 - **Whole conversations** (`test_dialog.py`): link → buy → receipt → refund, plus the popup fallback, run through the HTTP API.
+- **The newer features** (`test_features.py`): spending limit (including that a limit yes can't pay), reorder, order status and history, partial refunds with exact remainders, unlink, and product questions.
 
 **Manual end-to-end check against the real sandbox:** run this once with your `.env` filled in. It links a sandbox buyer, pays 1.00 EUR with no approval page, and refunds it.
 

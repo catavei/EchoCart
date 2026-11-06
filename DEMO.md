@@ -72,18 +72,22 @@ The actual totals depend on what Claude picks. Re-record until the edit reads na
 1. (8 s) The one-time **Link PayPal** window: *"You link PayPal once, in a popup EchoCart talks you through. PayPal saves the account, and later payments need no approval page."*
 2. (8 s) Claude's JSON next to the spoken cart: *"Claude turns speech into product ids and quantities, nothing else. The backend checks every id against the catalogue, enforces your budget, and works out every price itself."*
 3. (8 s) The **PayPal sandbox dashboard** showing the captured payment: *"PayPal Vault, Orders v2 to create and capture the payment, Payments v2 for refunds. Every payment action is logged."*
-4. (6 s) `docker compose up` in a terminal: *"Open source. One command to run."*
+4. (6 s) **Spending limit:** type 40 in Settings, then ask for something that costs more. *"Set a spending limit, and EchoCart won't pay above it. Raising it needs a yes."*
 
 ## Scene 5 (2:05–2:30): refund by voice
 
 *Screen Curtain back on, or just the page.*
 
-> **[Space.]** **You:** "Refund my last order."
-> **EchoCart:** "Refund your last order, number ending 7, 1, 5, T: … 10 euros 99 cents back to your PayPal, that's 54 lei 70 bani. Say yes to refund, or no to keep the order."
+> **[Space.]** **You:** "Refund just the batteries."
+> **EchoCart:** "Refund VoltMax AA alkaline batteries, 4 pack, quantity 2, from your last order, number ending 7, 1, 5, T. 9 euros 21 cents back to your PayPal, that's 45 lei 80 bani. The rest of the order stays. Say yes to refund, or no to keep it."
 > **You:** "Yes."
-> **[Success chime.]** **EchoCart:** "Refund done. 10 euros 99 cents will go back to your PayPal account."
+> **[Success chime.]** **EchoCart:** "Refund done. 9 euros 21 cents will go back to your PayPal account."
 
-Cut to the sandbox dashboard showing the refund (2 s).
+Cut to the sandbox dashboard showing the partial refund (2 s). If there's time, add:
+
+> **You:** "Same as last time." **EchoCart:** "Your last order again. Your cart: …"
+
+*(Narration:* "Partial refunds, reorders, order status, all by voice.")
 
 ## Scene 6 (2:30–2:45): built for screen readers, and close
 
@@ -107,6 +111,6 @@ Cut to the sandbox dashboard showing the refund (2 s).
 | 1. Cold open | 0:15 | Voice request + read-back |
 | 2. Problem | 0:35 | Who it's for, why checkout fails them |
 | 3. Screen-off purchase | 1:35 | **Full purchase by voice, screen off**, **one edit**, the clear-yes rule |
-| 4. How it works | 2:05 | PayPal Vault + Orders + Payments, Claude JSON, backend pricing |
-| 5. Refund | 2:30 | **Refund by voice** + dashboard |
+| 4. How it works | 2:05 | PayPal Vault + Orders + Payments, Claude JSON, backend pricing, spending limit |
+| 5. Refund | 2:30 | **Partial refund by voice** + dashboard (+ "same as last time" if time allows) |
 | 6. Accessibility + close | 2:45 | Screen-reader mode, Esc, typing fallback, zoom |
