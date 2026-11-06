@@ -94,7 +94,7 @@ class LLMCartResponse(BaseModel):
 
 _BUDGET_RE = re.compile(
     r"\b(?:under|below|less than|max(?:imum)?|at most|up to|no more than|within|sub|maxim|până la)\s+"
-    r"(\d+(?:[.,]\d{1,2})?)\s*(?:lei|ron|leu)?",
+    r"(\d+(?:[.,]\d{1,2})?)\s*(?:de\s+)?(?:lei|ron|leu)?",
     re.IGNORECASE,
 )
 
