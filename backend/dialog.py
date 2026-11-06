@@ -1,28 +1,36 @@
 """The conversation: one utterance in, one spoken reply out.
 
 Every word the app speaks is produced here, so this is also where the
-confirmation gate is armed (only right after a read-back that states the exact
-amount) and disarmed (after anything else).
+confirmation gate is armed (only right after a read-back that states exactly
+what will happen) and disarmed (after anything else).
 
 Text from the LLM is only ever spoken for clarifying questions. Carts, totals,
 receipts and refunds are described in backend-generated sentences.
+
+Actions that need a read-back and a clear yes:
+  payment  pay for the cart (amount spoken)
+  refund   refund all or part of the last order (amount spoken)
+  unlink   remove the saved PayPal account
+  limit    raise or remove the per-order spending limit
 """
 from __future__ import annotations
 
+import hashlib
 import logging
 import re
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Callable, Literal
 
-from .cart import Catalog, PricedCart, readback, say_date, say_eur, say_lei
-from .llm import CartParser, LLMError
+from .cart import (Catalog, CartError, PricedCart, price_cart, readback, ron_to_eur, say_date,
+                   say_eur, say_lei)
+from .llm import CartParser, LLMError, OfflineCartParser
 from .paypal_client import PayPalClient, PayPalError, _link, first_capture_id
 from .safety import (ConfirmationGate, ConfirmKind, Rejected, is_confirmation, normalize_utterance,
                      refund_fingerprint, validate_llm_output)
-from .store import OrderRecord, Store
+from .store import OrderLine, OrderRecord, Store
 
 log = logging.getLogger("echocart.dialog")
 
@@ -30,20 +38,34 @@ HELP = (
     "Say what you'd like to buy, for example: two packs of AA batteries under 50 lei. "
     "I'll read the cart back with the total. Then say yes to pay, or ask for a change: "
     "remove an item, make it three, or cheaper option. "
-    "Say repeat to hear the last thing again, read my cart, cancel to empty the cart, "
-    "or refund my last order. Press Escape to stop me talking."
+    "You can also ask how much something costs, say same as last time, ask where's my order, "
+    "refund my last order or just one item from it, or set a spending limit. "
+    "Say repeat to hear the last thing again, read my cart, or cancel. Press Escape to stop me talking."
 )
 WELCOME = "Welcome to EchoCart. Press the talk button or the Space bar, then say what you'd like to buy. Say help at any time."
 NOT_LINKED_HINT = " Before your first payment you'll link your PayPal account once."
 
+_N = r"(\d+(?:[.,]\d{1,2})?)"
 _REPEAT = re.compile(r"^(repeat( that| please| it)?|say (that|it) again|again|pardon|what|sorry)$")
 _READ_CART = re.compile(r"\b(read|repeat|what s in|whats in|what is in) (me )?(my |the )?(cart|basket)\b")
 _CANCEL = re.compile(r"^(cancel( that| it| order)?|start over|never mind|empty (my |the )?cart|clear (my |the )?cart|stop)$")
 _HELP = re.compile(r"^(help|help me|what can i say|ajutor)$")
-_NO = re.compile(r"^(no|nope|not now|don t|do not|wait|nu)\b")
-_NEAR_YES = re.compile(r"^(yes|yeah|yep|ok|okay|sure|da|go ahead|pay)\b")
+_NO = re.compile(r"^(no|nope|not now|don t|do not|wait|keep it|nu)\b")
+_NEAR_YES = re.compile(r"^(yes|yeah|yep|ok|okay|sure|da|go ahead|pay|refund it)\b")
+_UNLINK = re.compile(r"\b(unlink|disconnect|forget|remove|delete) (my )?pay ?pal\b")
 _LINK = re.compile(r"\b(link|connect) (my )?pay ?pal\b")
 _REFUND = re.compile(r"\b(refund|money back|ramburs)")
+_REORDER = re.compile(r"\b(reorder|re order|order (it |that |them )?again|same (thing |order )?as (last time|before|last week)|"
+                      r"the same again|buy (it|that|them) again|repeat my (last )?order)\b")
+_WHERE = re.compile(r"\b(where s|where is|track|status of)\b.*\b(order|delivery|parcel|package)\b|"
+                    r"\bwhen (will|does|is) (it|my order|the order|my delivery)\b")
+_HISTORY = re.compile(r"\bwhat did i (order|buy)\b|\b(my|order) history\b|\bmy (last|recent|previous) orders\b")
+_LIMIT_ASK = re.compile(r"\bwhat s my (spending )?limit\b|\bwhat is my (spending )?limit\b|\bdo i have a (spending )?limit\b")
+_LIMIT_OFF = re.compile(r"\b(remove|turn off|clear|delete|cancel|no more) (my |the |a )?(spending )?limit\b")
+_LIMIT_SET = re.compile(rf"\b(?:spending )?limit\b.*?\b{_N}\b|\blimit (?:me|each order|orders) to {_N}\b")
+_INFO = re.compile(r"^(how much (is|are|does|do|for)|what s the price|what is the price|price of|do you (have|sell)|"
+                   r"what (kind|kinds|types|sort|sorts) of|what .+ do you (have|sell)|tell me about|is there|are there|"
+                   r"what .+ are there)\b")
 
 Priority = Literal["polite", "assertive"]
 
@@ -57,6 +79,7 @@ class Reply:
     action: dict | None = None         # {"type": "link"} | {"type": "approve", "url": ...}
     awaiting: ConfirmKind | None = None
     linked: bool = False
+    spending_limit_ron: str | None = None
     receipt: dict | None = None
 
     def to_json(self) -> dict:
@@ -72,6 +95,36 @@ class Deps:
     eur_per_ron: Decimal
     base_url: str
     today: Callable[[], date] = date.today
+    matcher: OfflineCartParser | None = None
+
+    def __post_init__(self):
+        if self.matcher is None:
+            self.matcher = OfflineCartParser(self.catalog)
+
+
+@dataclass
+class RefundPlan:
+    order: OrderRecord
+    lines: list[OrderLine]        # the lines being refunded
+    amount_eur: Decimal
+    amount_ron: Decimal
+    whole_order: bool
+
+    @property
+    def fingerprint(self) -> str:
+        ids = ",".join(sorted(line.product_id for line in self.lines))
+        return f"{refund_fingerprint(self.order.order_id, self.order.capture_id, self.amount_eur)}:{ids}"
+
+
+def _ending(order_id: str) -> str:
+    return ", ".join(order_id[-4:])
+
+
+def _parse_amount(text: str) -> Decimal | None:
+    try:
+        return Decimal(text.replace(",", "."))
+    except InvalidOperation:
+        return None
 
 
 @dataclass
@@ -82,11 +135,16 @@ class Conversation:
     gate: ConfirmationGate = field(default_factory=ConfirmationGate)
     last_reply: Reply | None = None
     last_arm: tuple[ConfirmKind, str] | None = None
-    refund_target: OrderRecord | None = None
+    refund_plan: RefundPlan | None = None
+    pending_limit: Decimal | None = None   # meaningful only while the gate is armed for "limit"
     pending_setup_token: str | None = None
     pending_approval: dict | None = None
     vault_unavailable: bool = False
     events: list[Reply] = field(default_factory=list)
+
+    @property
+    def store(self) -> Store:
+        return self.deps.store
 
     # ---- speaking -------------------------------------------------------
     def _say(self, speech: str, arm: tuple[ConfirmKind, str] | None = None, **kw) -> Reply:
@@ -96,30 +154,44 @@ class Conversation:
         else:
             self.gate.disarm()
         self.last_arm = arm
+        limit = self.store.spending_limit
         reply = Reply(speech=speech, cart=self.cart.to_json() if self.cart else None,
-                      awaiting=arm[0] if arm else None, linked=self.deps.store.linked, **kw)
+                      awaiting=arm[0] if arm else None, linked=self.store.linked,
+                      spending_limit_ron=str(limit) if limit is not None else None, **kw)
         self.last_reply = reply
         return reply
 
-    def _readback(self, prefix: str = "") -> Reply:
+    def _over_limit(self, cart: PricedCart) -> bool:
+        limit = self.store.spending_limit
+        return limit is not None and cart.total_ron > limit
+
+    def _propose(self, prefix: str = "") -> Reply:
+        """Read the cart back. Arms payment only if the cart is within the spending limit."""
         assert self.cart is not None
+        if self._over_limit(self.cart):
+            limit = self.store.spending_limit
+            return self._say(
+                f"{prefix}That comes to {say_lei(self.cart.total_ron)}, over your spending limit of "
+                f"{say_lei(limit)} per order, so I can't pay for it. Remove something, ask for a cheaper option, "
+                "or say raise my limit to a new amount.", priority="assertive")
         return self._say(prefix + readback(self.cart, self.deps.today()),
                          arm=("payment", self.cart.fingerprint))
 
     def welcome(self) -> Reply:
-        hint = "" if self.deps.store.linked else NOT_LINKED_HINT
+        hint = "" if self.store.linked else NOT_LINKED_HINT
         return self._say(WELCOME + hint)
 
     def _repeat(self) -> Reply:
         if self.last_reply is None:
             return self.welcome()
-        if self.last_arm:  # the same total is being spoken again, so the yes stays valid
+        if self.last_arm:  # the same words are spoken again, so the yes stays valid
             self.gate.arm(*self.last_arm)
         return self.last_reply
 
     # ---- main entry -----------------------------------------------------
     async def handle(self, text: str) -> Reply:
-        norm = normalize_utterance(text)
+        # Commands are matched with apostrophes as spaces: "what's" -> "what s", "don't" -> "don t".
+        norm = normalize_utterance(text).replace("'", " ")
         if not norm:
             return self._say("I didn't hear anything. Press the talk button and try again.")
         if _REPEAT.match(norm):
@@ -128,25 +200,22 @@ class Conversation:
         armed = self.gate.armed_for
         if armed == "payment" and self.cart and self.gate.consume(text, "payment", self.cart.fingerprint):
             return await self._pay()
-        if armed == "refund" and self.refund_target and self.gate.consume(
-                text, "refund", self._refund_fp(self.refund_target)):
+        if armed == "refund" and self.refund_plan and self.gate.consume(
+                text, "refund", self.refund_plan.fingerprint):
             return await self._refund()
+        if armed == "unlink" and self.gate.consume(text, "unlink", self._unlink_fp()):
+            return await self._unlink()
+        if armed == "limit" and self.gate.consume(text, "limit", self._limit_fp(self.pending_limit)):
+            return self._apply_limit(self.pending_limit)
         # From here on the gate is disarmed: whatever was said, it was not a valid yes.
 
-        if armed == "payment" and self.cart:
-            if _NO.match(norm):
-                return self._say("Okay, I won't pay. Tell me what to change, or say read my cart.")
-            if _NEAR_YES.match(norm):
-                return self._readback("I need a clear yes before paying. ")
-        if armed == "refund" and self.refund_target:
-            if _NO.match(norm):
-                self.refund_target = None
-                return self._say("Okay, no refund. Your order stays as it is.")
-            if _NEAR_YES.match(norm):
-                return self._start_refund("I need a clear yes before refunding. ")
+        if armed and _NO.match(norm):
+            return self._decline(armed)
+        if armed and _NEAR_YES.match(norm):
+            return self._reask(armed)
         if not armed and is_confirmation(text):
             if self.cart:
-                return self._readback("Before paying I'll read the cart again. ")
+                return self._propose("Before paying I'll read the cart again. ")
             return self._say("There's nothing to confirm yet. Tell me what you'd like to buy.")
 
         if _HELP.match(norm):
@@ -155,12 +224,52 @@ class Conversation:
             self.cart = None
             return self._say("Cart emptied. What would you like instead?")
         if _READ_CART.search(norm):
-            return self._readback() if self.cart else self._say("Your cart is empty.")
+            return self._propose() if self.cart else self._say("Your cart is empty.")
+        if _UNLINK.search(norm):
+            return self._offer_unlink()
         if _LINK.search(norm):
             return self._offer_link()
+        if _LIMIT_ASK.search(norm):
+            return self._say_limit()
+        if _LIMIT_OFF.search(norm):
+            return self._request_limit(None)
+        m = _LIMIT_SET.search(norm.replace(" lei", "").replace(" ron", ""))
+        if m and "limit" in norm:
+            amount = _parse_amount(m.group(1) or m.group(2))
+            if amount is not None and amount > 0:
+                return self._request_limit(amount)
         if _REFUND.search(norm):
-            return self._start_refund()
+            return self._start_refund(text)
+        if _REORDER.search(norm):
+            return self._reorder()
+        if _WHERE.search(norm):
+            return self._order_status()
+        if _HISTORY.search(norm):
+            return self._order_history()
+        if _INFO.match(norm):
+            return self._product_info(text)
         return await self._understand(text)
+
+    def _decline(self, armed: ConfirmKind) -> Reply:
+        if armed == "payment":
+            return self._say("Okay, I won't pay. Tell me what to change, or say read my cart.")
+        if armed == "refund":
+            self.refund_plan = None
+            return self._say("Okay, no refund. Your order stays as it is.")
+        if armed == "unlink":
+            return self._say("Okay, your PayPal account stays linked.")
+        self.pending_limit = None
+        return self._say_limit("Okay, I haven't changed it. ")
+
+    def _reask(self, armed: ConfirmKind) -> Reply:
+        prefix = "I need a clear yes. "
+        if armed == "payment" and self.cart:
+            return self._propose("I need a clear yes before paying. ")
+        if armed == "refund" and self.refund_plan:
+            return self._speak_refund("I need a clear yes before refunding. ")
+        if armed == "unlink":
+            return self._offer_unlink(prefix)
+        return self._request_limit(self.pending_limit, prefix)
 
     # ---- understanding requests ----------------------------------------
     async def _understand(self, text: str) -> Reply:
@@ -185,20 +294,32 @@ class Conversation:
             self.cart = None
             return self._say("Cart emptied. What would you like instead?")
         if resp.action == "refund_request":
-            return self._start_refund()
+            return self._start_refund(text)
         prefix = "Updated. " if resp.action == "edit_cart" and self.cart else ""
         self.cart = result.cart
-        return self._readback(prefix)
+        return self._propose(prefix)
+
+    def _product_info(self, text: str) -> Reply:
+        products = self.deps.matcher.find(text)
+        if not products:
+            return self._say("I couldn't find that in the shop. Try another name for it.")
+        parts = []
+        for p in products[:4]:
+            stock = "" if p.stock else ", out of stock"
+            parts.append(f"{p.brand} {p.name}, {p.pack_size}: {say_lei(p.price_ron)}{stock}")
+        more = f" And {len(products) - 4} more." if len(products) > 4 else ""
+        tail = " Your cart hasn't changed." if self.cart else " Say what you'd like and how many."
+        return self._say("; ".join(parts) + "." + more + tail)
 
     # ---- paying ---------------------------------------------------------
     def _paypal_missing(self) -> Reply:
-        return self._say("PayPal isn't configured on this server, so I can't take payments. "
+        return self._say("PayPal isn't configured on this server, so I can't take payments or refunds. "
                          "The cart is still here.", priority="assertive", earcon="error")
 
     def _offer_link(self, prefix: str = "") -> Reply:
         if self.deps.paypal is None:
             return self._paypal_missing()
-        if self.deps.store.linked:
+        if self.store.linked:
             return self._say("Your PayPal account is already linked.")
         return self._say(
             prefix + "To link PayPal, press Enter now to open the PayPal window. Log in and approve. "
@@ -209,12 +330,14 @@ class Conversation:
         cart = self.cart
         if self.deps.paypal is None:
             return self._paypal_missing()
+        if self._over_limit(cart):  # defence in depth: _propose never arms an over-limit cart
+            return self._propose()
         if self.pending_approval:  # never create a second order while one awaits approval
             return self._say("A PayPal window is already waiting for you to approve this payment. "
                              "Press Enter to open it again.", priority="assertive",
                              action={"type": "approve", "url": self.pending_approval.get("url")})
         ref = f"echocart-{uuid.uuid4().hex[:12]}"
-        if not self.deps.store.linked:
+        if not self.store.linked:
             if not self.vault_unavailable:
                 return self._offer_link("Your PayPal account isn't linked yet. ")
             base, sid = self.deps.base_url, self.session_id
@@ -227,7 +350,7 @@ class Conversation:
             return self._ask_for_approval(order["id"], order["approve_url"], cart)
         try:
             order = await self.deps.paypal.create_order_with_vault(
-                self.deps.store.data.vault_id, cart.total_eur, self._summary(cart), ref)
+                self.store.data.vault_id, cart.total_eur, self._summary(cart), ref)
             if order.get("status") == "PAYER_ACTION_REQUIRED":
                 return self._ask_for_approval(order["id"], _link(order, "payer-action"), cart)
             if order.get("status") != "COMPLETED":
@@ -246,8 +369,8 @@ class Conversation:
     def _payment_failed(self, e: PayPalError) -> Reply:
         log.warning("payment failed: %s %s", e.status, e.body)
         name = e.body.get("name", "an error") if isinstance(e.body, dict) else "an error"
-        reply = self._readback(f"The payment didn't go through. PayPal reported {name.replace('_', ' ').lower()}. "
-                               "No money was taken. ")
+        reply = self._propose(f"The payment didn't go through. PayPal reported {name.replace('_', ' ').lower()}. "
+                              "No money was taken. ")
         reply.priority, reply.earcon = "assertive", "error"
         return reply
 
@@ -257,52 +380,182 @@ class Conversation:
 
     def _receipt(self, order: dict, cart: PricedCart) -> Reply:
         capture_id = first_capture_id(order)
-        record = OrderRecord(order_id=order["id"], capture_id=capture_id or "",
-                             total_ron=str(cart.total_ron), total_eur=str(cart.total_eur),
-                             delivery_date=cart.delivery_date.isoformat(), summary=self._summary(cart))
-        self.deps.store.add_order(record)
+        record = OrderRecord(
+            order_id=order["id"], capture_id=capture_id or "", total_ron=str(cart.total_ron),
+            total_eur=str(cart.total_eur), delivery_date=cart.delivery_date.isoformat(),
+            summary=self._summary(cart), created_at=self.deps.today().isoformat(),
+            items=[OrderLine(l.product.id, l.product.spoken_name, l.quantity, str(l.subtotal_ron))
+                   for l in cart.lines])
+        self.store.add_order(record)
         self.cart = None
-        ending = ", ".join(order["id"][-4:])
         return self._say(
-            f"Payment done. Order number ending {ending}. Charged {say_eur(cart.total_eur)}, "
+            f"Payment done. Order number ending {_ending(order['id'])}. Charged {say_eur(cart.total_eur)}, "
             f"that's {say_lei(cart.total_ron)}. Delivery {say_date(cart.delivery_date, self.deps.today())}.",
             priority="assertive", earcon="success",
             receipt={"order_id": order["id"], "capture_id": capture_id, "total_eur": str(cart.total_eur),
                      "total_ron": str(cart.total_ron), "delivery_date": cart.delivery_date.isoformat()})
 
-    # ---- refunds --------------------------------------------------------
-    @staticmethod
-    def _refund_fp(order: OrderRecord) -> str:
-        return refund_fingerprint(order.order_id, order.capture_id, Decimal(order.total_eur))
+    # ---- orders: reorder, status, history -------------------------------
+    def _reorder(self) -> Reply:
+        last = self.store.last_order()
+        if last is None:
+            return self._say("You haven't ordered anything yet. Tell me what you'd like to buy.")
+        if not last.items:
+            return self._say("I can't see the items of your last order. Tell me what you'd like to buy.")
+        try:
+            cart = price_cart([{"product_id": l.product_id, "quantity": l.quantity} for l in last.items],
+                              self.deps.catalog, self.deps.eur_per_ron, self.deps.today())
+        except CartError as e:
+            return self._say(f"I can't repeat your last order exactly. {e} Tell me what you'd like instead.")
+        self.cart = cart
+        return self._propose("Your last order again. ")
 
-    def _start_refund(self, prefix: str = "") -> Reply:
-        order = self.deps.store.last_refundable()
+    def _describe_order(self, order: OrderRecord) -> str:
+        due = date.fromisoformat(order.delivery_date)
+        today = self.deps.today()
+        if order.refunded:
+            state = "was refunded"
+        elif due < today:
+            state = f"was due {say_date(due, today)}, so it should have arrived"
+        elif due == today:
+            state = "arrives today"
+        else:
+            state = f"arrives {say_date(due, today)}"
+        partly = " Part of it was refunded." if not order.refunded and Decimal(order.refunded_eur) > 0 else ""
+        return f"order number ending {_ending(order.order_id)}, {order.summary}, {state}.{partly}"
+
+    def _order_status(self) -> Reply:
+        last = self.store.last_order()
+        if last is None:
+            return self._say("You haven't ordered anything yet.")
+        return self._say("Your last " + self._describe_order(last))
+
+    def _order_history(self) -> Reply:
+        orders = self.store.data.orders[-3:][::-1]
+        if not orders:
+            return self._say("You haven't ordered anything yet.")
+        parts = [f"{i}: {say_eur(Decimal(o.total_eur))}, {self._describe_order(o)}"
+                 for i, o in enumerate(orders, 1)]
+        count = "order" if len(orders) == 1 else f"{len(orders)} orders"
+        return self._say(f"Your last {count}, newest first. " + " ".join(parts) +
+                         " Say same as last time to order the newest one again.")
+
+    # ---- refunds --------------------------------------------------------
+    def _start_refund(self, text: str = "") -> Reply:
+        order = self.store.last_refundable()
         if order is None:
-            self.refund_target = None
+            self.refund_plan = None
             return self._say("There's no order to refund.")
-        self.refund_target = order
-        ending = ", ".join(order.order_id[-4:])
-        return self._say(
-            f"{prefix}Refund your last order, number ending {ending}: {order.summary}. "
-            f"{say_eur(Decimal(order.total_eur))} back to your PayPal, that's {say_lei(Decimal(order.total_ron))}. "
-            "Say yes to refund, or no to keep the order.",
-            arm=("refund", self._refund_fp(order)))
+        open_lines = order.open_lines
+        named = {p.id for p in self.deps.matcher.find(text)} if text else set()
+        chosen = [l for l in open_lines if l.product_id in named]
+        if named and not chosen:
+            listing = "; ".join(l.name for l in open_lines) or order.summary
+            self.refund_plan = None
+            return self._say(f"Your last order didn't include that. It has: {listing}. "
+                             "Which item should I refund, or say refund my last order for all of it?")
+        if not chosen or len(chosen) == len(open_lines):
+            lines = open_lines
+            amount_eur = order.remaining_eur
+            amount_ron = sum((Decimal(l.subtotal_ron) for l in lines), Decimal("0")) if lines else Decimal(order.total_ron)
+            whole = True
+        else:
+            lines = chosen
+            amount_ron = sum((Decimal(l.subtotal_ron) for l in lines), Decimal("0"))
+            amount_eur = min(ron_to_eur(amount_ron, self.deps.eur_per_ron), order.remaining_eur)
+            whole = False
+        self.refund_plan = RefundPlan(order, lines, amount_eur, amount_ron, whole)
+        return self._speak_refund()
+
+    def _speak_refund(self, prefix: str = "") -> Reply:
+        plan = self.refund_plan
+        money = f"{say_eur(plan.amount_eur)} back to your PayPal, that's {say_lei(plan.amount_ron)}."
+        if plan.whole_order:
+            what = "Refund your last order" if Decimal(plan.order.refunded_eur) == 0 else "Refund the rest of your last order"
+            items = "; ".join(l.name for l in plan.lines) or plan.order.summary
+            speech = (f"{prefix}{what}, number ending {_ending(plan.order.order_id)}: {items}. {money} "
+                      "Say yes to refund, or no to keep the order.")
+        else:
+            items = "; ".join(f"{l.name}, quantity {l.quantity}" for l in plan.lines)
+            speech = (f"{prefix}Refund {items}, from your last order, number ending {_ending(plan.order.order_id)}. "
+                      f"{money} The rest of the order stays. Say yes to refund, or no to keep it.")
+        return self._say(speech, arm=("refund", plan.fingerprint))
 
     async def _refund(self) -> Reply:
-        order, self.refund_target = self.refund_target, None
+        plan, self.refund_plan = self.refund_plan, None
         if self.deps.paypal is None:
             return self._paypal_missing()
+        full = plan.whole_order and Decimal(plan.order.refunded_eur) == 0
+        key = "refund-" + hashlib.sha256(plan.fingerprint.encode()).hexdigest()[:24]
         try:
-            refund = await self.deps.paypal.refund_capture(order.capture_id, order.order_id)
+            refund = await self.deps.paypal.refund_capture(
+                plan.order.capture_id, plan.order.order_id, None if full else plan.amount_eur, key)
         except PayPalError as e:
             log.warning("refund failed: %s %s", e.status, e.body)
             return self._say("The refund didn't go through. Nothing has changed. Say refund my last order to try again.",
                              priority="assertive", earcon="error")
-        self.deps.store.mark_refunded(order.order_id, refund.get("id"))
-        status = refund.get("status", "")
-        when = "" if status == "COMPLETED" else " PayPal is still processing it."
-        return self._say(f"Refund done. {say_eur(Decimal(order.total_eur))} will go back to your PayPal account.{when}",
+        ids = None if plan.whole_order else {l.product_id for l in plan.lines}
+        self.store.record_refund(plan.order.order_id, refund.get("id"), plan.amount_eur, ids)
+        when = "" if refund.get("status", "COMPLETED") == "COMPLETED" else " PayPal is still processing it."
+        return self._say(f"Refund done. {say_eur(plan.amount_eur)} will go back to your PayPal account.{when}",
                          priority="assertive", earcon="success")
+
+    # ---- unlink ---------------------------------------------------------
+    def _unlink_fp(self) -> str:
+        return f"unlink:{self.store.data.vault_id}"
+
+    def _offer_unlink(self, prefix: str = "") -> Reply:
+        if not self.store.linked:
+            return self._say("No PayPal account is linked.")
+        return self._say(f"{prefix}This removes your saved PayPal account from EchoCart. To pay again you'd link it "
+                         "again. Say yes to unlink, or no to keep it.", arm=("unlink", self._unlink_fp()))
+
+    async def _unlink(self) -> Reply:
+        vault_id = self.store.data.vault_id
+        if self.deps.paypal is not None:
+            try:
+                await self.deps.paypal.delete_payment_token(vault_id)
+            except PayPalError as e:
+                if e.status != 404:  # already gone at PayPal is fine
+                    log.warning("unlink failed: %s %s", e.status, e.body)
+                    return self._say("PayPal couldn't remove the saved account. It's still linked. Please try again.",
+                                     priority="assertive", earcon="error")
+        self.store.unlink()
+        return self._say("Your PayPal account is unlinked. EchoCart no longer has a saved way to pay.",
+                         priority="assertive", earcon="success")
+
+    # ---- spending limit -------------------------------------------------
+    @staticmethod
+    def _limit_fp(limit: Decimal | None) -> str:
+        return f"limit:{limit}"
+
+    def _say_limit(self, prefix: str = "") -> Reply:
+        limit = self.store.spending_limit
+        if limit is None:
+            return self._say(prefix + "You have no spending limit. Say set my limit to, and an amount in lei, to add one.")
+        return self._say(prefix + f"Your spending limit is {say_lei(limit)} per order.")
+
+    def _request_limit(self, new: Decimal | None, prefix: str = "") -> Reply:
+        current = self.store.spending_limit
+        # Lowering (or setting a first limit) only makes things safer: apply at once.
+        if new is not None and (current is None or new <= current):
+            return self._apply_limit(new)
+        if current is None:
+            return self._say("You have no spending limit to remove.")
+        self.pending_limit = new
+        change = ("remove your spending limit, so any order total can be paid" if new is None
+                  else f"raise your spending limit from {say_lei(current)} to {say_lei(new)} per order")
+        return self._say(f"{prefix}This will {change}. Say yes to confirm, or no to keep it.",
+                         arm=("limit", self._limit_fp(new)))
+
+    def _apply_limit(self, new: Decimal | None) -> Reply:
+        self.pending_limit = None
+        self.store.set_spending_limit(new)
+        speech = ("Spending limit removed." if new is None
+                  else f"Spending limit set. I won't pay for any order over {say_lei(new)}.")
+        if self.cart:
+            return self._propose(speech + " ")
+        return self._say(speech)
 
     # ---- PayPal window callbacks (called by app.py) ----------------------
     async def start_link(self) -> str:
@@ -318,7 +571,7 @@ class Conversation:
     def vault_fallback_notice(self) -> Reply:
         prefix = "PayPal can't save your account on this server, so you'll approve each payment in a PayPal window. "
         if self.cart:
-            return self._readback(prefix)
+            return self._propose(prefix)
         return self._say(prefix + "Tell me what you'd like to buy.", priority="assertive")
 
     async def complete_link(self) -> Reply:
@@ -333,8 +586,8 @@ class Conversation:
                 reply = self._say("Linking PayPal didn't work. Say link PayPal to try again.",
                                   priority="assertive", earcon="error")
             else:
-                self.deps.store.link(tok["vault_id"], tok["customer_id"])
-                reply = (self._readback("PayPal is linked. ") if self.cart
+                self.store.link(tok["vault_id"], tok["customer_id"])
+                reply = (self._propose("PayPal is linked. ") if self.cart
                          else self._say("PayPal is linked. Tell me what you'd like to buy."))
                 reply.priority, reply.earcon = "assertive", "success"
         self.events.append(reply)

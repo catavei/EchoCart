@@ -86,9 +86,15 @@
     cartEl.append(ul, total, delivery);
   }
 
+  const limitInput = $("limit");
+  function showLimit(limit) {
+    if (document.activeElement !== limitInput) limitInput.value = limit ? String(Math.round(Number(limit))) : "";
+  }
+
   function handleReply(reply) {
     lastReply = reply;
     renderCart(reply.cart);
+    if ("spending_limit_ron" in reply) showLimit(reply.spending_limit_ron);
     addLog("EchoCart", reply.speech);
     announce(reply.speech, reply.priority);
     if (reply.earcon && window.Earcons) Earcons[reply.earcon]();
@@ -132,6 +138,7 @@
     sessionId = reply.session_id;
     // Browsers block speech before the first key press, so the welcome is shown and announced only.
     renderCart(reply.cart);
+    showLimit(reply.spending_limit_ron);
     addLog("EchoCart", reply.speech);
     announce(reply.speech, "polite");
     lastReply = reply;
@@ -241,6 +248,18 @@
     event.preventDefault();
     toggleListening();
   });
+
+  // The limit form speaks to the same conversation, so raising/removing gets the same spoken yes.
+  $("limit-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const value = Number(limitInput.value);
+    if (!value || value < 1) {
+      handleReply({ speech: "Enter a limit of at least 1 leu.", priority: "assertive", cart: lastReply && lastReply.cart });
+      return;
+    }
+    send(`set my spending limit to ${value} lei`);
+  });
+  $("limit-remove").addEventListener("click", () => send("remove my spending limit"));
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();

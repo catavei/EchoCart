@@ -32,7 +32,9 @@ def is_confirmation(text: str) -> bool:
     return normalize_utterance(text) in ACCEPTED_CONFIRMATIONS
 
 
-ConfirmKind = Literal["payment", "refund"]
+# payment / refund move money; unlink removes the saved PayPal account;
+# limit raises or removes the spending limit. All need a read-back and a clear yes.
+ConfirmKind = Literal["payment", "refund", "unlink", "limit"]
 
 
 @dataclass

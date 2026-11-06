@@ -30,10 +30,15 @@
     osc.stop(t + duration + 0.02);
   }
 
+  // Matching vibration patterns on phones, for shoppers who are also hard of hearing.
+  function buzz(pattern) {
+    try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* not supported */ }
+  }
+
   window.Earcons = {
-    listenStart() { tone(660, 0, 0.09); tone(880, 0.09, 0.12); },
-    listenStop() { tone(880, 0, 0.09); tone(587, 0.09, 0.12); },
-    success() { tone(784, 0, 0.12); tone(988, 0.11, 0.12); tone(1319, 0.22, 0.28); },
-    error() { tone(220, 0, 0.14, "square", 0.08); tone(196, 0.17, 0.2, "square", 0.08); },
+    listenStart() { tone(660, 0, 0.09); tone(880, 0.09, 0.12); buzz(40); },
+    listenStop() { tone(880, 0, 0.09); tone(587, 0.09, 0.12); buzz([20, 60, 20]); },
+    success() { tone(784, 0, 0.12); tone(988, 0.11, 0.12); tone(1319, 0.22, 0.28); buzz([60, 60, 60, 60, 200]); },
+    error() { tone(220, 0, 0.14, "square", 0.08); tone(196, 0.17, 0.2, "square", 0.08); buzz([300, 100, 300]); },
   };
 })();

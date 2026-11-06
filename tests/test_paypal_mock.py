@@ -40,6 +40,8 @@ class FakePayPal:
                                              "purchase_units": [{"payments": {"captures": [{"id": "CAP1"}]}}]})
         if path == "/v2/payments/captures/CAP1/refund":
             return httpx.Response(201, json={"id": "REF1", "status": "COMPLETED"})
+        if request.method == "DELETE" and path.startswith("/v3/vault/payment-tokens/"):
+            return httpx.Response(204)
         if path == "/v2/payments/captures/BAD/refund":
             return httpx.Response(422, json={"name": "UNPROCESSABLE_ENTITY"})
         return httpx.Response(404, json={})

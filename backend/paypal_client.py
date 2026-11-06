@@ -191,12 +191,22 @@ class PayPalClient:
         return body
 
     # ---- Payments v2 -----------------------------------------------------
-    async def refund_capture(self, capture_id: str, order_id: str) -> dict:
-        body = await self._request("POST", f"/v2/payments/captures/{capture_id}/refund", {},
-                                   idempotency_key=f"refund-{capture_id}")
-        self._log.write("refund", order_id=order_id, capture_id=capture_id,
-                        refund_id=body.get("id"), status=body.get("status"))
+    async def refund_capture(self, capture_id: str, order_id: str, amount_eur: Decimal | None = None,
+                             idempotency_key: str | None = None) -> dict:
+        """Full refund, or a partial one when amount_eur is given."""
+        payload = {} if amount_eur is None else {
+            "amount": {"currency_code": "EUR", "value": f"{amount_eur:.2f}"}}
+        body = await self._request("POST", f"/v2/payments/captures/{capture_id}/refund", payload,
+                                   idempotency_key=idempotency_key or f"refund-{capture_id}")
+        self._log.write("refund", order_id=order_id, capture_id=capture_id, refund_id=body.get("id"),
+                        status=body.get("status"),
+                        amount_eur=f"{amount_eur:.2f}" if amount_eur is not None else "full")
         return body
+
+    async def delete_payment_token(self, vault_id: str) -> None:
+        """Remove the saved PayPal account (Vault v3)."""
+        await self._request("DELETE", f"/v3/vault/payment-tokens/{vault_id}")
+        self._log.write("unlink", vault_id=vault_id)
 
 
 def first_capture_id(order: dict) -> str | None:

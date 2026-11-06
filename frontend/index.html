@@ -58,6 +58,13 @@
         <input id="rate" type="range" min="0.6" max="2" step="0.1" value="1" aria-describedby="rate-value">
         <output id="rate-value" for="rate">1.0×</output>
       </div>
+      <form id="limit-form" class="setting" aria-describedby="limit-help">
+        <label for="limit">Spending limit per order, in lei</label>
+        <input id="limit" type="number" inputmode="decimal" min="1" step="1" autocomplete="off">
+        <button type="submit">Set limit</button>
+        <button id="limit-remove" type="button" class="secondary">Remove limit</button>
+        <p id="limit-help" class="hint">EchoCart won't pay for an order above this. Lowering it takes effect at once; raising or removing it asks you to confirm.</p>
+      </form>
       <div class="setting">
         <label for="lang">Language I speak in</label>
         <select id="lang">

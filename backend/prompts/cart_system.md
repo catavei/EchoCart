@@ -18,7 +18,7 @@ Additional rules for this app:
 - "Cheaper option" means: swap each item for a cheaper product of the same kind, if one exists.
 - Speech recognition mishears words. "double a" means AA, "triple a" means AAA. Shoppers may use Romanian
   product names (for example "baterii", "apă plată", "hârtie igienică").
-- A request to refund the last order is action "refund_request" with no items.
+- A request to refund the last order is action "refund_request". If the shopper names items ("refund just the batteries"), list them in items; otherwise items is empty.
 - Products with stock 0 are unavailable; offer an alternative instead.
 
 Catalogue (id | product | pack | price | stock):

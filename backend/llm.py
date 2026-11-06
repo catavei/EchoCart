@@ -117,7 +117,10 @@ _SYNONYMS = [(r"\bdouble a\b", "aa"), (r"\btriple a\b", "aaa"), (r"\bdouble aa\b
              (r"\bdouble-a\b", "aa"), (r"\b(\d+) volt\b", r"\1v"), (r"\bnine volt\b", "9v")]
 _STOPWORDS = {"of", "the", "some", "and", "pack", "packs", "please", "i", "want", "need", "buy",
               "get", "me", "under", "lei", "ron", "de", "si", "și", "with", "for", "box", "boxes",
-              "bottle", "bottles", "could", "you", "order", "would", "like", "also", "sub", "pentru"}
+              "bottle", "bottles", "could", "you", "order", "would", "like", "also", "sub", "pentru",
+              "refund", "last", "my", "just", "only", "how", "much", "is", "price", "what", "do",
+              "have", "tell", "about", "kinds", "types", "cost", "costs", "does", "your", "any",
+              "are", "there", "which", "in", "stock", "s", "a", "an", "it", "that", "to"}
 # Words shared by a whole category; they don't make two products "the same kind".
 _GENERIC_TERMS = {"batteries", "baterii", "alkaline", "alcaline", "battery", "baterie", "cheap",
                   "tablets", "bags", "mineral", "minerala", "apa", "water"}
@@ -144,6 +147,10 @@ class OfflineCartParser:
 
     async def parse(self, transcript: str, current_items: list[dict]) -> object:
         return self.parse_sync(transcript, current_items)
+
+    def find(self, text: str) -> list[Product]:
+        """Best-matching products for free text (used for questions and refunds)."""
+        return self._match(self._clean(text))
 
     # ---- helpers
     def _clean(self, text: str) -> str:
