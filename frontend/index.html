@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EchoCart: shop by voice</title>
+  <meta name="description" content="Voice-first shopping and PayPal checkout for blind and low-vision shoppers.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>EchoCart</h1>
+    <p class="tagline">Shop by voice. Pay with PayPal.</p>
+  </header>
+
+  <main>
+    <section class="talk-area" aria-labelledby="talk-heading">
+      <h2 id="talk-heading" class="visually-hidden">Talk to EchoCart</h2>
+      <button id="talk" class="talk" type="button" aria-pressed="false" aria-describedby="talk-hint">
+        <span id="talk-label">Talk</span>
+      </button>
+      <p id="talk-hint" class="hint">Press Space or the Talk button, then speak. Press Escape to stop EchoCart talking. Say “help” for what you can say.</p>
+
+      <!-- Everything EchoCart says is also written here, for screen readers and braille displays. -->
+      <p id="said" class="said" role="status" aria-live="polite" aria-atomic="true"></p>
+      <p id="said-urgent" class="said said-urgent" role="alert" aria-live="assertive" aria-atomic="true"></p>
+
+      <div class="paypal-actions">
+        <button id="link-paypal" class="secondary" type="button" hidden>Link my PayPal account (one time)</button>
+        <button id="open-approval" class="secondary" type="button" hidden>Open PayPal to approve the payment</button>
+      </div>
+    </section>
+
+    <section aria-labelledby="type-heading">
+      <h2 id="type-heading">Type instead</h2>
+      <form id="type-form" class="type-form">
+        <label for="typed">What would you like to say?</label>
+        <div class="type-row">
+          <input id="typed" name="typed" type="text" autocomplete="off" maxlength="500">
+          <button type="submit">Send</button>
+        </div>
+      </form>
+    </section>
+
+    <section aria-labelledby="cart-heading">
+      <h2 id="cart-heading">Your cart</h2>
+      <div id="cart"><p>Your cart is empty.</p></div>
+    </section>
+
+    <section aria-labelledby="settings-heading">
+      <h2 id="settings-heading">Settings</h2>
+      <div class="setting">
+        <input id="sr-mode" type="checkbox">
+        <label for="sr-mode">Let my screen reader speak (turns off EchoCart’s own voice)</label>
+      </div>
+      <div class="setting">
+        <label for="rate">Speech rate</label>
+        <input id="rate" type="range" min="0.6" max="2" step="0.1" value="1" aria-describedby="rate-value">
+        <output id="rate-value" for="rate">1.0×</output>
+      </div>
+      <div class="setting">
+        <label for="lang">Language I speak in</label>
+        <select id="lang">
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="ro-RO">Română</option>
+        </select>
+      </div>
+    </section>
+
+    <section aria-labelledby="log-heading">
+      <h2 id="log-heading">Conversation</h2>
+      <ol id="log" class="log"></ol>
+    </section>
+  </main>
+
+  <footer>
+    <p>PayPal sandbox demo. No real money moves.</p>
+  </footer>
+
+  <script src="sounds/earcons.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

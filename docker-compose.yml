@@ -1,0 +1,14 @@
+services:
+  echocart:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Without a .env the app still starts: offline parser, payments disabled.
+      LLM_MODE: ${LLM_MODE:-offline}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped

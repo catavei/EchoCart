@@ -262,5 +262,8 @@ class OfflineCartParser:
 def make_parser(settings, catalog: Catalog) -> CartParser:
     if settings.llm_mode == "offline":
         return OfflineCartParser(catalog)
+    if not settings.anthropic_api_key:
+        log.warning("ANTHROPIC_API_KEY not set: using the offline parser instead of Claude")
+        return OfflineCartParser(catalog)
     return AnthropicCartParser(settings.anthropic_api_key, settings.anthropic_model, catalog,
                                settings.anthropic_effort)
