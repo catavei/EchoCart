@@ -156,6 +156,33 @@ class PayPalClient:
                         amount_eur=f"{amount_eur:.2f}", reference_id=reference_id)
         return body
 
+    async def create_order_for_approval(self, amount_eur: Decimal, description: str,
+                                        reference_id: str, return_url: str, cancel_url: str) -> dict:
+        """Fallback when no wallet is linked: standard order the buyer approves in a popup.
+
+        Returns {"id", "status", "approve_url"}; capture after PayPal redirects to return_url.
+        """
+        payload = {
+            "intent": "CAPTURE",
+            "purchase_units": [{
+                "reference_id": reference_id,
+                "description": description[:127],
+                "amount": {"currency_code": "EUR", "value": f"{amount_eur:.2f}"},
+            }],
+            "payment_source": {"paypal": {"experience_context": {
+                "brand_name": "EchoCart",
+                "shipping_preference": "NO_SHIPPING",
+                "user_action": "PAY_NOW",
+                "return_url": return_url,
+                "cancel_url": cancel_url,
+            }}},
+        }
+        body = await self._request("POST", "/v2/checkout/orders", payload, idempotency_key=reference_id)
+        self._log.write("create", order_id=body.get("id"), status=body.get("status"),
+                        amount_eur=f"{amount_eur:.2f}", reference_id=reference_id, flow="approval")
+        return {"id": body["id"], "status": body.get("status"),
+                "approve_url": _link(body, "payer-action") or _link(body, "approve")}
+
     async def capture_order(self, order_id: str) -> dict:
         body = await self._request("POST", f"/v2/checkout/orders/{order_id}/capture", {},
                                    idempotency_key=f"capture-{order_id}")
