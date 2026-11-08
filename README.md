@@ -62,7 +62,7 @@ EchoCart is designed around three things a blind shopper needs to trust a paymen
 
 1. Sign in at <https://developer.paypal.com/> and open **Apps & Credentials**, making sure the **Sandbox** toggle is on.
 2. Create an app (or use the default one) and copy its **Client ID** and **Secret**.
-3. In the app's **Sandbox App Settings > App Feature Options**, make sure **Accept payments** is ticked. Then open **Advanced options** and tick **Vault**. Without Vault, EchoCart still works, but you approve each payment in a popup.
+3. On the app's page, scroll to **Features > Payment capabilities**, tick **Save payment methods** ("Use the Vault API to save your customer's payment methods"), and click **Save changes** at the bottom. Without it, EchoCart still works, but you approve each payment in a popup. (Older dashboards call this **App Feature Options > Advanced options > Vault**.)
 4. Open **Testing Tools > Sandbox Accounts** and note the email and password of a **Personal** sandbox account. You log in with it as the shopper.
 
 ### 2. Configure (1 min)
