@@ -101,7 +101,7 @@ These rules are covered by 71 automated tests, including 30 recorded-style utter
 - **Popups and accessibility.** Browsers block a popup opened by a voice command, because it isn't a user gesture. The fix: EchoCart says "press Enter" and moves focus to the button, so the key press opens the window.
 - **Trust versus convenience.** It's tempting to accept "yeah" or "sure". We chose a strict rule, and made the error message re-read the total so a strict yes is never confusing.
 - **RON isn't a PayPal REST currency**, so we price in lei and charge in EUR, and say both amounts.
-- **[EDIT: anything that came up during sandbox testing, e.g. risk-data requirements or Vault eligibility.]**
+- **Proving the vault path on the real sandbox before building on it.** A standalone script links a sandbox buyer, pays 1.00 EUR with the saved account and refunds it. The vaulted order came back `COMPLETED` directly from create, with no approval page and no separate capture call. **[EDIT: add anything else that came up.]**
 
 ## Accomplishments that we're proud of
 
@@ -131,6 +131,6 @@ These rules are covered by 71 automated tests, including 30 recorded-style utter
 
 ## Try it
 
-- **Repo:** **[EDIT: GitHub URL]** (MIT licence)
+- **Repo:** https://github.com/catavei/EchoCart (MIT licence)
 - **Video:** **[EDIT: YouTube URL]**
 - **Setup:** see the README. A PayPal sandbox app plus `docker compose up` takes about 5 minutes. All payments are sandbox; no real money moves.

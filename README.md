@@ -171,6 +171,7 @@ Be honest here: only list what was actually tested.
 | Date | Setup | What was tested | Result |
 |---|---|---|---|
 | 2026-11-06 | Chromium (automated), offline parser, PayPal not configured | Page load, focus on Talk, live-region text, typed purchase / edit / yes, 375px width, light and dark mode, no horizontal scroll, no console errors | Pass |
+| 2026-11-09 | Real PayPal sandbox (Vault enabled), `tests/manual/vault_spike.py` | Buyer approves the setup token once → payment token → order with `vault_id` returned COMPLETED (no approval page, no separate capture) → full refund COMPLETED | Pass |
 | _to do_ | NVDA 2026.x + Chrome, Windows 11 | Full voice purchase with the screen off, edit, refund, PayPal link window, "Let my screen reader speak" | |
 | _to do_ | VoiceOver + Safari, macOS | Typing fallback (Safari has no Web Speech recognition), live regions, PayPal window | |
 | _to do_ | VoiceOver + Chrome, macOS | Full voice purchase, Space / Esc, earcons | |
@@ -198,6 +199,8 @@ The suite has 71 tests:
 ```bash
 .venv/bin/python -m tests.manual.vault_spike
 ```
+
+Last run on 2026-11-09: the vaulted order came back `COMPLETED` straight from create, and the refund was `COMPLETED`.
 
 ## Project layout
 
