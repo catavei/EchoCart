@@ -49,6 +49,15 @@ def build_deps() -> Deps:
                 base_url=settings.app_base_url)
 
 
+class _RevalidatingStatic(StaticFiles):
+    """Without Cache-Control, browsers may reuse an old app.js after an update."""
+
+    def file_response(self, *args, **kwargs):
+        response = super().file_response(*args, **kwargs)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 def create_app(deps: Deps | None = None) -> FastAPI:
     state: dict = {"deps": deps, "sessions": {}}
 
@@ -125,7 +134,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         reply = conv.cancelled_in_paypal() if conv else None
         return _done_page(reply.speech if reply else "Nothing was charged. You can close this window.")
 
-    app.mount("/", StaticFiles(directory=FRONTEND, html=True), name="frontend")
+    app.mount("/", _RevalidatingStatic(directory=FRONTEND, html=True), name="frontend")
     return app
 
 

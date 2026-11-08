@@ -100,6 +100,12 @@ class OrdersByVoice(DialogBase):
         self.assertIn("Your last 2 orders, newest first", r.speech)
         self.assertLess(r.speech.index("Bin bags"), r.speech.index("AA alkaline"))
 
+    def test_history_single_order(self):
+        self.buy()
+        r = self.say("what did I order")
+        self.assertTrue(r.speech.startswith("Your last order: "), r.speech)
+        self.assertNotIn("newest first", r.speech)
+
 
 class PartialRefunds(DialogBase):
     def setUp(self):

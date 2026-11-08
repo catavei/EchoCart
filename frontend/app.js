@@ -12,6 +12,7 @@
   const srMode = $("sr-mode"), rate = $("rate"), rateValue = $("rate-value"), lang = $("lang");
 
   let sessionId = null;
+  let sessionReady = Promise.resolve();
   let listening = false;
   let busy = false;
   let approveUrl = null;
@@ -124,6 +125,8 @@
     busy = true;
     addLog("You", text);
     try {
+      // Speaking right after the page loads must not race the session request.
+      if (!sessionId) await sessionReady;
       handleReply(await post("/api/utterance", { session_id: sessionId, text }));
     } catch (e) {
       if (String(e.message).includes("Unknown session")) await startSession();
@@ -268,6 +271,7 @@
     send(text);
   });
 
-  startSession().then(() => talkBtn.disabled || talkBtn.focus())
+  sessionReady = startSession();
+  sessionReady.then(() => talkBtn.disabled || talkBtn.focus())
     .catch(() => announce("EchoCart can't reach its server. Check that it is running, then reload.", "assertive"));
 })();

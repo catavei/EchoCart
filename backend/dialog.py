@@ -434,10 +434,13 @@ class Conversation:
         orders = self.store.data.orders[-3:][::-1]
         if not orders:
             return self._say("You haven't ordered anything yet.")
+        if len(orders) == 1:
+            o = orders[0]
+            return self._say(f"Your last order: {say_eur(Decimal(o.total_eur))}, {self._describe_order(o)} "
+                             "Say same as last time to order it again.")
         parts = [f"{i}: {say_eur(Decimal(o.total_eur))}, {self._describe_order(o)}"
                  for i, o in enumerate(orders, 1)]
-        count = "order" if len(orders) == 1 else f"{len(orders)} orders"
-        return self._say(f"Your last {count}, newest first. " + " ".join(parts) +
+        return self._say(f"Your last {len(orders)} orders, newest first. " + " ".join(parts) +
                          " Say same as last time to order the newest one again.")
 
     # ---- refunds --------------------------------------------------------

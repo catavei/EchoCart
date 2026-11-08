@@ -172,6 +172,7 @@ Be honest here: only list what was actually tested.
 |---|---|---|---|
 | 2026-11-06 | Chromium (automated), offline parser, PayPal not configured | Page load, focus on Talk, live-region text, typed purchase / edit / yes, 375px width, light and dark mode, no horizontal scroll, no console errors | Pass |
 | 2026-11-09 | Real PayPal sandbox (Vault enabled), `tests/manual/vault_spike.py` | Buyer approves the setup token once → payment token → order with `vault_id` returned COMPLETED (no approval page, no separate capture) → full refund COMPLETED | Pass |
+| 2026-11-09 | Full app against the real PayPal sandbox, offline parser, typed input | Link PayPal (in Chrome; a browser that blocks pop-ups gets a spoken "allow pop-ups" message), the demo script's purchase with the edit and the refused "yeah", payment with no PayPal page, order status, partial refund of one line (PayPal shows the capture as PARTIALLY_REFUNDED), order history. The audit log matches PayPal | Pass |
 | _to do_ | NVDA 2026.x + Chrome, Windows 11 | Full voice purchase with the screen off, edit, refund, PayPal link window, "Let my screen reader speak" | |
 | _to do_ | VoiceOver + Safari, macOS | Typing fallback (Safari has no Web Speech recognition), live regions, PayPal window | |
 | _to do_ | VoiceOver + Chrome, macOS | Full voice purchase, Space / Esc, earcons | |
@@ -185,7 +186,7 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 71 tests:
+The suite has 75 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
 - **Safety rules** (`test_safety.py`): no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.

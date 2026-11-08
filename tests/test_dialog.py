@@ -206,6 +206,15 @@ class ApprovalFallback(DialogBase):
 
 
 class Api(unittest.TestCase):
+    def test_frontend_files_revalidate(self):
+        tmp = tempfile.TemporaryDirectory()
+        deps = Deps(CATALOG, OfflineCartParser(CATALOG), None, Store(Path(tmp.name) / "s.json"),
+                    Decimal("0.201"), "http://localhost:8000", today=lambda: TODAY)
+        with TestClient(create_app(deps)) as client:
+            for path in ("/", "/app.js"):
+                self.assertEqual(client.get(path).headers.get("cache-control"), "no-cache", path)
+        tmp.cleanup()
+
     def test_session_and_utterance(self):
         tmp = tempfile.TemporaryDirectory()
         deps = Deps(CATALOG, OfflineCartParser(CATALOG), None, Store(Path(tmp.name) / "s.json"),

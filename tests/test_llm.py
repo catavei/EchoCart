@@ -41,6 +41,28 @@ class OfflineFixtures(unittest.TestCase):
                     self.assertEqual(result.cart.as_items(), expect["items"])
 
 
+class OfflineQuantityEdits(unittest.TestCase):
+    """Naming an item already in the cart edits that item (the demo script's edit)."""
+    CART = [{"product_id": "bat-aa-4-vm", "quantity": 1}, {"product_id": "cln-dish-500", "quantity": 1}]
+
+    def edit(self, utterance):
+        raw = OfflineCartParser(CATALOG).parse_sync(utterance, self.CART)
+        result = validate_llm_output(raw, utterance, CATALOG, RATE, today=TODAY)
+        self.assertIsInstance(result, Validated, getattr(result, "reason", raw))
+        self.assertEqual(result.response.action, "edit_cart")
+        return result.cart.as_items()
+
+    def test_make_named_item_n(self):
+        self.assertEqual(self.edit("make the batteries two packs"),
+                         [{"product_id": "bat-aa-4-vm", "quantity": 2},
+                          {"product_id": "cln-dish-500", "quantity": 1}])
+
+    def test_change_named_item_to_n(self):
+        self.assertEqual(self.edit("change the dish soap to 3"),
+                         [{"product_id": "bat-aa-4-vm", "quantity": 1},
+                          {"product_id": "cln-dish-500", "quantity": 3}])
+
+
 def _claude_reply(payload: dict, status: int = 200) -> httpx.MockTransport:
     def handler(request: httpx.Request) -> httpx.Response:
         body = json.loads(request.content)

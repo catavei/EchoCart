@@ -77,7 +77,7 @@ The safety rules are enforced in code, not left to the AI's instructions:
 - **The spending limit is checked twice:** an over-limit cart is never offered for a yes, and the payment step checks again.
 - **A second order can't be created** while one is waiting for approval in the fallback popup.
 
-These rules are covered by 71 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
+These rules are covered by 75 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
 
 ## Accessibility choices
 

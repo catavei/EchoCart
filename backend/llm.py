@@ -182,6 +182,14 @@ class OfflineCartParser:
                 return _WORD_NUMBERS[word]
         return 1
 
+    @staticmethod
+    def _explicit_quantity(segment: str) -> int | None:
+        """Like _quantity, but None when no number was said."""
+        m = _QTY_RE.search(segment)
+        if m:
+            return int(m.group(1))
+        return next((_WORD_NUMBERS[w] for w in segment.split() if w in _WORD_NUMBERS), None)
+
     def _choose(self, candidates: list[Product], qty: int, budget: Decimal | None):
         """Pick one product, or return a question if the kinds genuinely differ."""
         in_stock = [p for p in candidates if p.stock >= qty]
@@ -244,6 +252,20 @@ class OfflineCartParser:
                     return self._result("clarify", question="How many would you like?")
                 current[-1]["quantity"] = n
                 return self._result("edit_cart", current, summary=f"Changed to {n}.")
+            # "make the batteries two packs" / "change the dish soap to 3": a named cart item.
+            m = re.search(r"\b(?:make|change|set)\b(.*)", text)
+            if m:
+                rest = m.group(1)
+                n = self._explicit_quantity(rest)
+                tokens = [t for t in rest.split() if t not in _STOPWORDS]
+                scores = [(sum(1 for t in tokens if t in self._terms[i["product_id"]]), idx)
+                          for idx, i in enumerate(current)]
+                best = max(scores)[0] if scores else 0
+                hits = [idx for s, idx in scores if s == best and s > 0]
+                if n and len(hits) == 1:
+                    current[hits[0]]["quantity"] = n
+                    name = self.catalog.get(current[hits[0]]["product_id"]).name
+                    return self._result("edit_cart", current, summary=f"{name}, changed to {n}.")
 
         segments = [s for s in re.split(r"\band\b|\bsi\b|\bplus\b", text) if s.strip()]
         items, names = [], []
