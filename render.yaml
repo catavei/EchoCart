@@ -18,12 +18,9 @@ services:
         sync: false
       - key: PAYPAL_CLIENT_SECRET
         sync: false
-      # Leave ANTHROPIC_API_KEY empty to run the offline parser. If you set it,
-      # set a monthly spend limit for the key in the Anthropic Console first.
+      # Offline parser: no Claude key needed, so the hosted demo costs nothing to run.
+      # To use Claude, add ANTHROPIC_API_KEY in the service's Environment tab on Render
+      # and set LLM_MODE to anthropic.
       - key: LLM_MODE
-        value: anthropic
-      - key: ANTHROPIC_API_KEY
-        sync: false
-      - key: ANTHROPIC_EFFORT
-        value: low
+        value: offline
       # APP_BASE_URL is not needed: EchoCart uses Render's RENDER_EXTERNAL_URL.

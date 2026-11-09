@@ -125,7 +125,7 @@ Then follow [First purchase](#4-first-purchase) from step 1.
 
 #### Hosting it on Render
 
-[`render.yaml`](render.yaml) describes the service. In the Render dashboard choose **New > Blueprint**, pick this repository, and fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and (optionally) `ANTHROPIC_API_KEY`. Leave the key empty to run the offline parser. If you set it, give the key a monthly spend limit in the Anthropic Console first, because anyone with the link can talk to the demo. Render sets the public address itself (`RENDER_EXTERNAL_URL`), so PayPal returns to the right page with no extra setting.
+[`render.yaml`](render.yaml) describes the service. In the Render dashboard choose **New > Blueprint**, pick this repository, and fill in `PAYPAL_CLIENT_ID` and `PAYPAL_CLIENT_SECRET`. The hosted demo runs the offline parser, so it needs no Claude key. To use Claude there, add `ANTHROPIC_API_KEY` in the service's **Environment** tab and set `LLM_MODE` to `anthropic`; give the key a spend limit first, because anyone with the link can talk to the demo. Render sets the public address itself (`RENDER_EXTERNAL_URL`), so PayPal returns to the right page with no extra setting.
 
 ---
 
