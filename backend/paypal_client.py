@@ -9,6 +9,7 @@ the order / capture id.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -29,6 +30,13 @@ class PayPalError(RuntimeError):
         super().__init__(message)
         self.status = status
         self.body = body
+
+
+class PayPalUnreachable(PayPalError):
+    """PayPal didn't answer, even after retries. The request may or may not have taken effect."""
+
+    def __init__(self, message: str):
+        super().__init__(message, None, {"name": "PAYPAL_UNREACHABLE"})
 
 
 class PaymentLog:
@@ -60,23 +68,39 @@ class PayPalClient:
         payment_log: PaymentLog,
         api_base: str = SANDBOX_API_BASE,
         transport: httpx.AsyncBaseTransport | None = None,
+        retry_delays: tuple[float, ...] = (1.0, 2.0),
     ):
         # Second line of defence after Settings.assert_sandbox().
         if api_base.rstrip("/") != SANDBOX_API_BASE:
             raise LiveCredentialsRefused(f"Refusing non-sandbox PayPal base URL {api_base!r}")
         self._auth = (client_id, client_secret)
         self._log = payment_log
-        self._http = httpx.AsyncClient(base_url=SANDBOX_API_BASE, transport=transport, timeout=30)
+        self._http = httpx.AsyncClient(base_url=SANDBOX_API_BASE, transport=transport,
+                                       timeout=httpx.Timeout(20.0, connect=10.0))
         self._token: str | None = None
+        self._retry_delays = retry_delays
 
     async def aclose(self) -> None:
         await self._http.aclose()
 
     # ---- plumbing -------------------------------------------------------
+    async def _send(self, method: str, path: str, **kwargs) -> httpx.Response:
+        """Send, retrying network failures. Every POST carries a fixed PayPal-Request-Id,
+        so PayPal treats a retry as the same request, not a second payment."""
+        for delay in (*self._retry_delays, None):
+            try:
+                return await self._http.request(method, path, **kwargs)
+            except httpx.TransportError as e:
+                log.warning("PayPal %s %s: %s", method, path, type(e).__name__)
+                if delay is None:
+                    raise PayPalUnreachable(f"PayPal {method} {path} did not answer") from e
+                await asyncio.sleep(delay)
+        raise AssertionError("unreachable")
+
     async def _access_token(self) -> str:
         if self._token is None:
-            resp = await self._http.post(
-                "/v1/oauth2/token", data={"grant_type": "client_credentials"}, auth=self._auth
+            resp = await self._send(
+                "POST", "/v1/oauth2/token", data={"grant_type": "client_credentials"}, auth=self._auth
             )
             if resp.status_code != 200:
                 raise PayPalError("PayPal authentication failed", resp.status_code, resp.text)
@@ -91,11 +115,11 @@ class PayPalClient:
             "Prefer": "return=representation",
             "PayPal-Request-Id": idempotency_key or str(uuid.uuid4()),
         }
-        resp = await self._http.request(method, path, json=json_body, headers=headers)
+        resp = await self._send(method, path, json=json_body, headers=headers)
         if resp.status_code == 401:  # token expired: refresh once
             self._token = None
             headers["Authorization"] = f"Bearer {await self._access_token()}"
-            resp = await self._http.request(method, path, json=json_body, headers=headers)
+            resp = await self._send(method, path, json=json_body, headers=headers)
         body = resp.json() if resp.content else {}
         if resp.status_code >= 400:
             raise PayPalError(f"PayPal {method} {path} failed", resp.status_code, body)
@@ -151,7 +175,13 @@ class PayPalClient:
             }],
             "payment_source": {"paypal": {"vault_id": vault_id}},
         }
-        body = await self._request("POST", "/v2/checkout/orders", payload, idempotency_key=reference_id)
+        try:
+            body = await self._request("POST", "/v2/checkout/orders", payload, idempotency_key=reference_id)
+        except PayPalUnreachable:
+            # The order may exist at PayPal. Retrying with this reference_id returns it.
+            self._log.write("create_unanswered", order_id=None, amount_eur=f"{amount_eur:.2f}",
+                            reference_id=reference_id)
+            raise
         self._log.write("create", order_id=body.get("id"), status=body.get("status"),
                         amount_eur=f"{amount_eur:.2f}", reference_id=reference_id)
         return body
@@ -196,8 +226,13 @@ class PayPalClient:
         """Full refund, or a partial one when amount_eur is given."""
         payload = {} if amount_eur is None else {
             "amount": {"currency_code": "EUR", "value": f"{amount_eur:.2f}"}}
-        body = await self._request("POST", f"/v2/payments/captures/{capture_id}/refund", payload,
-                                   idempotency_key=idempotency_key or f"refund-{capture_id}")
+        try:
+            body = await self._request("POST", f"/v2/payments/captures/{capture_id}/refund", payload,
+                                       idempotency_key=idempotency_key or f"refund-{capture_id}")
+        except PayPalUnreachable:
+            self._log.write("refund_unanswered", order_id=order_id, capture_id=capture_id,
+                            amount_eur=f"{amount_eur:.2f}" if amount_eur is not None else "full")
+            raise
         self._log.write("refund", order_id=order_id, capture_id=capture_id, refund_id=body.get("id"),
                         status=body.get("status"),
                         amount_eur=f"{amount_eur:.2f}" if amount_eur is not None else "full")

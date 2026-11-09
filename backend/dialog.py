@@ -27,7 +27,7 @@ from typing import Callable, Literal
 from .cart import (Catalog, CartError, PricedCart, price_cart, readback, ron_to_eur, say_date,
                    say_eur, say_lei)
 from .llm import CartParser, LLMError, OfflineCartParser
-from .paypal_client import PayPalClient, PayPalError, _link, first_capture_id
+from .paypal_client import PayPalClient, PayPalError, PayPalUnreachable, _link, first_capture_id
 from .safety import (ConfirmationGate, ConfirmKind, Rejected, is_confirmation, normalize_utterance,
                      refund_fingerprint, validate_llm_output)
 from .store import OrderLine, OrderRecord, Store
@@ -139,6 +139,9 @@ class Conversation:
     pending_limit: Decimal | None = None   # meaningful only while the gate is armed for "limit"
     pending_setup_token: str | None = None
     pending_approval: dict | None = None
+    # (cart fingerprint, PayPal-Request-Id) of a payment PayPal never answered: paying
+    # the same cart again reuses the id, so PayPal returns that order instead of a new one.
+    unanswered_payment: tuple[str, str] | None = None
     vault_unavailable: bool = False
     events: list[Reply] = field(default_factory=list)
 
@@ -336,7 +339,9 @@ class Conversation:
             return self._say("A PayPal window is already waiting for you to approve this payment. "
                              "Press Enter to open it again.", priority="assertive",
                              action={"type": "approve", "url": self.pending_approval.get("url")})
-        ref = f"echocart-{uuid.uuid4().hex[:12]}"
+        retry = self.unanswered_payment
+        ref = retry[1] if retry and retry[0] == cart.fingerprint else f"echocart-{uuid.uuid4().hex[:12]}"
+        self.unanswered_payment = None
         if not self.store.linked:
             if not self.vault_unavailable:
                 return self._offer_link("Your PayPal account isn't linked yet. ")
@@ -355,6 +360,13 @@ class Conversation:
                 return self._ask_for_approval(order["id"], _link(order, "payer-action"), cart)
             if order.get("status") != "COMPLETED":
                 order = await self.deps.paypal.capture_order(order["id"])
+        except PayPalUnreachable:
+            self.unanswered_payment = (cart.fingerprint, ref)
+            reply = self._propose("PayPal didn't answer in time, so I can't tell yet whether that payment "
+                                  "went through. If you say yes again, I'll ask PayPal about this same payment. "
+                                  "You won't be charged twice. ")
+            reply.priority, reply.earcon = "assertive", "error"
+            return reply
         except PayPalError as e:
             return self._payment_failed(e)
         return self._receipt(order, cart)
@@ -493,6 +505,10 @@ class Conversation:
         try:
             refund = await self.deps.paypal.refund_capture(
                 plan.order.capture_id, plan.order.order_id, None if full else plan.amount_eur, key)
+        except PayPalUnreachable:
+            return self._say("PayPal didn't answer in time, so I can't tell yet whether the refund went through. "
+                             "Say refund my last order to ask again. It won't be refunded twice.",
+                             priority="assertive", earcon="error")
         except PayPalError as e:
             log.warning("refund failed: %s %s", e.status, e.body)
             return self._say("The refund didn't go through. Nothing has changed. Say refund my last order to try again.",

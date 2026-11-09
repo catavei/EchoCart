@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx
 
 from backend.config import LiveCredentialsRefused, Settings
-from backend.paypal_client import PaymentLog, PayPalClient, PayPalError, first_capture_id
+from backend.paypal_client import PaymentLog, PayPalClient, PayPalError, PayPalUnreachable, first_capture_id
 
 
 class FakePayPal:
@@ -16,12 +16,19 @@ class FakePayPal:
 
     def __init__(self, order_status="COMPLETED"):
         self.calls: list[tuple[str, str, dict]] = []
+        self.request_ids: list[tuple[str, str]] = []
         self.order_status = order_status
+        self.timeouts: dict[str, float] = {}  # path -> how many more requests to time out
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
         body = json.loads(request.content) if request.content and path != "/v1/oauth2/token" else {}
         self.calls.append((request.method, path, body))
+        if "PayPal-Request-Id" in request.headers:
+            self.request_ids.append((path, request.headers["PayPal-Request-Id"]))
+        if self.timeouts.get(path, 0) > 0:
+            self.timeouts[path] -= 1
+            raise httpx.ReadTimeout("sandbox did not answer", request=request)
         if path == "/v1/oauth2/token":
             return httpx.Response(200, json={"access_token": "A21-test", "expires_in": 32400})
         assert request.headers["Authorization"] == "Bearer A21-test"
@@ -104,6 +111,33 @@ class PayPalClientTests(unittest.TestCase):
         with self.assertRaises(PayPalError) as ctx:
             asyncio.run(bad())
         self.assertEqual(ctx.exception.status, 422)
+
+    def create_order(self, fake):
+        async def go():
+            pp = PayPalClient("id", "secret", PaymentLog(self.log_path),
+                              transport=httpx.MockTransport(fake), retry_delays=(0, 0))
+            try:
+                return await pp.create_order_with_vault("VAULT1", Decimal("9.85"), "AA batteries", "ref-1")
+            finally:
+                await pp.aclose()
+        return asyncio.run(go())
+
+    def test_timeout_is_retried_with_the_same_request_id(self):
+        fake = FakePayPal()
+        fake.timeouts["/v2/checkout/orders"] = 1
+        order = self.create_order(fake)
+        self.assertEqual(order["status"], "COMPLETED")
+        ids = [rid for p, rid in fake.request_ids if p == "/v2/checkout/orders"]
+        self.assertEqual(ids, ["ref-1", "ref-1"])  # PayPal treats a repeated id as the same order
+
+    def test_unreachable_is_reported_and_logged(self):
+        fake = FakePayPal()
+        fake.timeouts["/v2/checkout/orders"] = float("inf")
+        with self.assertRaises(PayPalUnreachable):
+            self.create_order(fake)
+        self.assertEqual(sum(1 for p, _ in fake.request_ids if p == "/v2/checkout/orders"), 3)
+        entry = json.loads(self.log_path.read_text().splitlines()[-1])
+        self.assertEqual((entry["action"], entry["reference_id"]), ("create_unanswered", "ref-1"))
 
 
 class SandboxOnly(unittest.TestCase):

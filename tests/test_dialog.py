@@ -56,6 +56,46 @@ class DialogBase(unittest.TestCase):
         return [p for m, p, b in self.fake.calls if p.endswith("/refund")]
 
 
+class PayPalSilent(DialogBase):
+    """PayPal doesn't answer: never claim nothing was charged, and never charge twice."""
+
+    def setUp(self):
+        super().setUp()
+        self.paypal._retry_delays = (0, 0)
+        self.link()
+        self.say("two packs of AA batteries")
+
+    def test_unanswered_payment_then_yes_again_reuses_the_same_order(self):
+        self.fake.timeouts["/v2/checkout/orders"] = 3  # every attempt of the first yes
+        r = self.say("yes")
+        self.assertIn("can't tell yet", r.speech)
+        self.assertNotIn("No money was taken", r.speech)
+        self.assertEqual(r.awaiting, "payment")  # the total was read back, so a new yes is valid
+        self.assertEqual(self.store.data.orders, [])
+
+        r = self.say("yes")  # PayPal answers now
+        self.assertIn("Payment done", r.speech)
+        ids = {rid for p, rid in self.fake.request_ids if p == "/v2/checkout/orders"}
+        self.assertEqual(len(ids), 1)  # one PayPal-Request-Id: PayPal returns the same order
+        self.assertEqual(len(self.store.data.orders), 1)
+
+    def test_changed_cart_gets_a_new_request_id(self):
+        self.fake.timeouts["/v2/checkout/orders"] = 3
+        self.say("yes")
+        self.say("make it three")
+        self.say("yes")
+        ids = [rid for p, rid in self.fake.request_ids if p == "/v2/checkout/orders"]
+        self.assertEqual(len(set(ids)), 2)
+
+    def test_unanswered_refund_does_not_say_nothing_changed(self):
+        self.say("yes")
+        self.say("refund my last order")
+        self.fake.timeouts["/v2/payments/captures/CAP1/refund"] = 3
+        r = self.say("yes")
+        self.assertIn("can't tell yet", r.speech)
+        self.assertNotIn("Nothing has changed", r.speech)
+
+
 class PurchaseFlow(DialogBase):
     def test_link_buy_receipt(self):
         linked = self.link()

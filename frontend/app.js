@@ -124,6 +124,8 @@
     if (!text || busy) return;
     busy = true;
     addLog("You", text);
+    // Silence while PayPal is slow is unsettling when you can't see a spinner.
+    const slow = setTimeout(() => { announce("One moment.", "polite"); speak("One moment."); }, 1500);
     try {
       // Speaking right after the page loads must not race the session request.
       if (!sessionId) await sessionReady;
@@ -132,6 +134,7 @@
       if (String(e.message).includes("Unknown session")) await startSession();
       handleReply({ speech: "Something went wrong talking to EchoCart. Please try again.", priority: "assertive", earcon: "error", cart: lastReply && lastReply.cart });
     } finally {
+      clearTimeout(slow);
       busy = false;
     }
   }
