@@ -35,6 +35,10 @@ class Utterance(SessionRef):
     text: str = Field(max_length=500)
 
 
+class AddProduct(SessionRef):
+    product_id: str = Field(min_length=1, max_length=100)
+
+
 class PinEntry(SessionRef):
     pin: str = Field(max_length=8)
 
@@ -124,6 +128,10 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         return reply.to_json()
 
     # The PIN never goes through /api/utterance, so it is never logged, parsed or spoken.
+    @app.post("/api/cart/add")
+    def cart_add(body: AddProduct):
+        return session(body.session_id).add_product(body.product_id).to_json()
+
     @app.post("/api/pin")
     async def pin_entry(body: PinEntry):
         return (await session(body.session_id).submit_pin(body.pin)).to_json()

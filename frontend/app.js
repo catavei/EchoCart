@@ -386,6 +386,27 @@
     send(text);
   });
 
+  // The shop's Add to basket buttons ask EchoCart (in its panel) to add to the same cart. EchoCart
+  // reads the cart back, so paying still needs the spoken yes. Only the shop page around us may ask.
+  if (embedded) {
+    const adds = [];
+    const drainAdds = async () => {
+      if (!adds.length) return;
+      if (busy || !sessionId) { setTimeout(drainAdds, 200); return; }
+      const m = adds.shift();
+      await postReply("/api/cart/add", { product_id: m.product_id }, `(Add to basket: ${m.name})`);
+      drainAdds();
+    };
+    window.addEventListener("message", (event) => {
+      if (event.origin !== location.origin || event.source !== parent) return;
+      const m = event.data;
+      if (m && m.type === "echocart:add" && typeof m.product_id === "string") {
+        adds.push({ product_id: m.product_id, name: String(m.name || "a product").slice(0, 120) });
+        drainAdds();
+      }
+    });
+  }
+
   sessionReady = startSession();
   sessionReady.then(() => talkBtn.disabled || talkBtn.focus())
     .catch(() => announce("EchoCart can't reach its server. Check that it is running, then reload.", "assertive"));

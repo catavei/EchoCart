@@ -49,3 +49,42 @@ class ShopSite(unittest.TestCase):
             self.assertEqual(get_settings().shop_name, "Linden Street Pharmacy")
         with mock.patch.dict(os.environ, {"SHOP_NAME": ""}):
             self.assertEqual(get_settings().shop_name, "Demo shop")
+
+
+class AddToBasket(unittest.TestCase):
+    """The shop's Add to basket button adds to the same EchoCart cart, read back, still needing a yes."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        catalog = load_catalog(SAMPLE)
+        self.deps = Deps(catalog, OfflineCartParser(catalog), None, Store(Path(self.tmp.name) / "s.json"),
+                         "http://localhost:8000", today=lambda: TODAY)
+
+    def add(self, client, sid, product_id, status=200):
+        r = client.post("/api/cart/add", json={"session_id": sid, "product_id": product_id})
+        self.assertEqual(r.status_code, status)
+        return r.json()
+
+    def test_adds_and_reads_back(self):
+        with TestClient(create_app(self.deps)) as client:
+            sid = client.post("/api/session").json()["session_id"]
+            r = self.add(client, sid, "ibuprofen-200-16-tablets")
+            self.assertTrue(r["speech"].startswith("Added Linden Health Ibuprofen 200 mg tablets, 16 tablets. Your cart:"))
+            self.assertIn("Total 2 euros 49 cents.", r["speech"])
+            self.assertEqual(r["awaiting"], "payment")
+            r = self.add(client, sid, "ibuprofen-200-16-tablets")
+            self.assertTrue(r["speech"].startswith("Updated. Your cart:"))
+            self.assertIn("quantity two. Total 4 euros 98 cents.", r["speech"])
+            r = self.add(client, sid, "vitamin-d3")
+            self.assertEqual([l["product_id"] for l in r["cart"]["lines"]], ["ibuprofen-200-16-tablets", "vitamin-d3"])
+
+    def test_out_of_stock_and_unknown(self):
+        with TestClient(create_app(self.deps)) as client:
+            sid = client.post("/api/session").json()["session_id"]
+            r = self.add(client, sid, "throat-lozenges-blackcurrant")
+            self.assertIn("out of stock", r["speech"])
+            self.assertIsNone(r["cart"])
+            r = self.add(client, sid, "no-such-product")
+            self.assertIn("isn't in the shop", r["speech"])
+            self.add(client, sid, "x" * 200, status=422)

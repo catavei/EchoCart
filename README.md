@@ -156,7 +156,7 @@ Everything else in the feed (descriptions, images, dates) is ignored. The feed i
 
 ### The demo shop page
 
-`/shop/` is a small shop website built from the same catalogue, to show EchoCart the way a merchant would add it: a **Shop by voice** button opens EchoCart in a panel beside the products, with the keyboard focus on its Talk button. Each reply passes the cart and, after a payment, the receipt to the shop page, so the shop's own basket changes as you speak (new and changed lines and the total are highlighted) and an order confirmation appears once PayPal has the money. EchoCart still prices everything, reads it back and waits for the yes; the shop page only displays it.
+`/shop/` is a small shop website built from the same catalogue, to show EchoCart the way a merchant would add it. It's laid out like a real pharmacy's category page: search, categories, brand and price filters, sorting, and an **Add to basket** button on each product. A **Shop by voice** button opens EchoCart in a panel beside the products, with the keyboard focus on its Talk button. Add to basket fills the same EchoCart cart (`POST /api/cart/add`): EchoCart reads the cart back, so paying still needs the spoken yes. Each reply passes the cart and, after a payment, the receipt to the shop page, so the shop's own basket changes as you speak (new and changed lines and the total are highlighted) and an order confirmation appears once PayPal has the money. EchoCart still prices everything, reads it back and waits for the yes; the shop page only displays it.
 
 ```bash
 CATALOG_URL=examples/linden-street-pharmacy.json SHOP_NAME="Linden Street Pharmacy" uvicorn backend.app:app
@@ -227,7 +227,7 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 120 tests:
+The suite has 122 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
 - **Safety rules** (`test_safety.py`): the everyday ways to say yes, and the replies that only sound like one; no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
@@ -237,7 +237,7 @@ The suite has 120 tests:
 - **The newer features** (`test_features.py`): spending limit (including that a limit yes can't pay), reorder, order status and history, partial refunds with exact remainders, unlink, and product questions.
 - **PayPal not answering** (`test_paypal_mock.py`, `test_dialog.py`): retries reuse the same request id, the reply never claims nothing was charged, and a second yes can't create a second order.
 - **Merchant product feeds** (`test_feed.py`): the Shopify-style feed becomes products with the right names, prices, stock and delivery; unusable feeds are refused; loading by URL or file; and a whole voice purchase from the sample pharmacy feed.
-- **The demo shop page** (`test_shop.py`): the shop's product list comes from the same catalogue, with stock, and the page is served.
+- **The demo shop page** (`test_shop.py`): the shop's product list comes from the same catalogue, with stock; the page is served; Add to basket adds to the same cart and reads it back, waiting for a yes; out-of-stock and unknown products are refused.
 - **The PIN** (`test_pin.py`): hashing, lockout and expiry, yes then PIN, the PIN alone never pays, anything said cancels the PIN step, the amount threshold, limit and unlink need it, refunds don't, changing it needs the current PIN, and the PIN never appears in replies or the store file.
 
 **Manual end-to-end check against the real sandbox:** run this once with your `.env` filled in. It links a sandbox buyer, pays 1.00 EUR with no approval page, and refunds it.

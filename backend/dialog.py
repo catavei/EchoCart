@@ -430,6 +430,24 @@ class Conversation:
         self.cart = result.cart
         return self._propose(prefix)
 
+    def add_product(self, product_id: str) -> Reply:
+        """The shop page's Add to basket button: one more of a product in the same cart. The backend
+        prices it and reads the cart back, so paying still needs the spoken yes."""
+        self.pending_pin = None
+        product = self.deps.catalog.get(product_id)
+        if product is None:
+            return self._say("That product isn't in the shop any more.", priority="assertive", earcon="error")
+        if product.stock == 0:
+            return self._say(f"Sorry, {product.spoken_name} is out of stock.", priority="assertive", earcon="error")
+        items = (self.cart.as_items() if self.cart else []) + [{"product_id": product_id, "quantity": 1}]
+        try:
+            cart = price_cart(items, self.deps.catalog, self.deps.today())
+        except CartError as e:
+            return self._say(f"I couldn't add that. {e}", priority="assertive", earcon="error")
+        had_it = bool(self.cart) and any(l.product.id == product_id for l in self.cart.lines)
+        self.cart = cart
+        return self._propose("Updated. " if had_it else f"Added {product.spoken_name}. ")
+
     def _product_info(self, text: str) -> Reply:
         products = self.deps.matcher.find(text)
         if not products:

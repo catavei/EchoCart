@@ -4,39 +4,121 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Demo shop</title>
-  <meta name="description" content="A demo shop with EchoCart added as its voice checkout.">
+  <meta name="description" content="A demo pharmacy shop with EchoCart added as its voice checkout.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&display=swap">
   <link rel="stylesheet" href="shop.css">
 </head>
 <body>
   <!-- A demo of how a merchant adds EchoCart to their own website: the products come from the
-       same catalogue EchoCart sells from, and the basket follows the voice conversation. -->
-  <header class="shop-header">
-    <div>
-      <h1 id="shop-name">Demo shop</h1>
-      <p class="demo-note">Demo shop · PayPal sandbox, no real money moves</p>
+       same catalogue EchoCart sells from, Add to basket fills the same cart, and the basket and
+       order confirmation follow the voice conversation. -->
+  <a class="skip" href="#results">Skip to products</a>
+
+  <p class="promo">Free delivery on orders over €25. Order by 4 pm for delivery tomorrow.</p>
+
+  <header class="masthead">
+    <a class="logo" href="./">
+      <svg class="logo-mark" viewBox="0 0 48 48" aria-hidden="true" focusable="false">
+        <path d="M24 44c-1-6-3-9-8-12C8 27 5 21 7 14c2-6 9-9 14-5 1 1 2 2 3 4 1-2 2-3 3-4 5-4 12-1 14 5 2 7-1 13-9 18-5 3-7 6-8 12z" fill="currentColor"/>
+        <path d="M24 42V16M24 30l-7-6M24 24l6-6" stroke="var(--paper)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      </svg>
+      <span id="shop-name" class="logo-name">Demo shop</span>
+    </a>
+
+    <form class="search" role="search" id="search-form">
+      <label for="search" class="visually-hidden">Search products</label>
+      <input id="search" type="search" placeholder="Search for products, brands and more" autocomplete="off">
+      <button class="icon-button" type="submit">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>Search</span>
+      </button>
+    </form>
+
+    <div class="masthead-actions">
+      <button id="voice-toggle" class="voice-toggle" type="button" aria-expanded="false" aria-controls="voice-panel">
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-5a3.5 3.5 0 0 0-7 0v5A3.5 3.5 0 0 0 12 15zm6-3.5a6 6 0 0 1-12 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span id="voice-toggle-label">Shop by voice</span>
+      </button>
+      <a class="icon-button basket-link" href="#basket-heading">
+        <span class="bag">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 9h16l-1.5 10.5a1.5 1.5 0 0 1-1.5 1.3H7a1.5 1.5 0 0 1-1.5-1.3zM8.5 9 12 3.5 15.5 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+          <span id="basket-count" class="badge" aria-hidden="true" hidden></span>
+        </span>
+        <span>Basket</span>
+        <span id="basket-summary" class="visually-hidden">, empty</span>
+      </a>
     </div>
-    <button id="voice-toggle" class="voice-toggle" type="button" aria-expanded="false" aria-controls="voice-panel">
-      Shop by voice
-    </button>
   </header>
 
+  <nav class="categories" aria-label="Categories">
+    <ul id="categories"></ul>
+  </nav>
+
+  <ul class="trust" aria-label="Why shop with us">
+    <li><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 7h11v9H3zM14 10h4l3 3v3h-7zM7 19a1.8 1.8 0 1 0 0-3.6A1.8 1.8 0 0 0 7 19zm10 0a1.8 1.8 0 1 0 0-3.6 1.8 1.8 0 0 0 0 3.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Next-day delivery</li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 8l8-4 8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>Discreet packaging</li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 18v-1a5 5 0 0 1 5-5h4a5 5 0 0 1 5 5v1M12 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Free advice from our pharmacists</li>
+    <li><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15a3.5 3.5 0 0 0 3.5-3.5v-5a3.5 3.5 0 0 0-7 0v5A3.5 3.5 0 0 0 12 15zm6-3.5a6 6 0 0 1-12 0M12 17.5V21" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Order by voice, pay with PayPal</li>
+  </ul>
+
   <div class="layout">
-    <main>
+    <nav class="crumbs" aria-label="Breadcrumb">
+      <ol><li><a href="./">Home</a></li><li id="crumb-current" aria-current="page">All products</li></ol>
+    </nav>
+    <div class="title-row">
+      <h1 id="page-title">All products</h1>
+      <p id="products-count" class="muted"></p>
+    </div>
+
+    <aside class="filters" aria-labelledby="filters-heading">
+      <h2 id="filters-heading">Filter by</h2>
+      <fieldset>
+        <legend>Brand</legend>
+        <div id="brand-filters"></div>
+      </fieldset>
+      <fieldset>
+        <legend>Price</legend>
+        <label><input type="radio" name="price" value="any" checked> Any price</label>
+        <label><input type="radio" name="price" value="0-3"> Under €3</label>
+        <label><input type="radio" name="price" value="3-6"> €3 to €6</label>
+        <label><input type="radio" name="price" value="6-999"> Over €6</label>
+      </fieldset>
+    </aside>
+
+    <main id="results" tabindex="-1">
       <section id="order" class="order" aria-labelledby="order-heading" hidden>
-        <h2 id="order-heading">Order confirmed</h2>
-        <p id="order-text"></p>
-        <ul id="order-lines" class="order-lines"></ul>
+        <svg class="order-tick" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div>
+          <h2 id="order-heading">Order confirmed</h2>
+          <p id="order-text"></p>
+          <ul id="order-lines" class="order-lines"></ul>
+        </div>
       </section>
 
-      <section class="basket-area" aria-labelledby="basket-heading">
+      <section id="basket-box" class="basket" aria-labelledby="basket-heading" hidden>
         <h2 id="basket-heading">Your basket</h2>
-        <div id="basket"><p class="muted">Your basket is empty.</p></div>
+        <div id="basket"></div>
       </section>
 
-      <section aria-labelledby="products-heading">
-        <h2 id="products-heading">Products</h2>
-        <ul id="products" class="products"><li class="muted">Loading products…</li></ul>
+      <section id="welcome" class="welcome" aria-labelledby="welcome-heading">
+        <h2 id="welcome-heading">Shop without looking at the screen</h2>
+        <p>Say what you need, hear the total read back, then say yes. Your saved PayPal account pays, with no forms to fill in.</p>
+        <button id="welcome-voice" class="voice-cta" type="button">Start shopping by voice</button>
       </section>
+
+      <div class="sort-row">
+        <label for="sort">Sort by</label>
+        <select id="sort">
+          <option value="featured">Featured</option>
+          <option value="price-asc">Price, low to high</option>
+          <option value="price-desc">Price, high to low</option>
+          <option value="name">Name, A to Z</option>
+        </select>
+      </div>
+      <h2 class="visually-hidden">Products</h2>
+      <ul id="products" class="products"><li class="muted">Loading products…</li></ul>
     </main>
 
     <aside id="voice-panel" class="voice-panel" aria-labelledby="voice-heading" hidden>
@@ -44,6 +126,10 @@
       <iframe id="voice-frame" title="EchoCart voice checkout" allow="microphone"></iframe>
     </aside>
   </div>
+
+  <footer class="footer">
+    <p><strong id="footer-name">Demo shop</strong> is a demo for EchoCart. The products, brands and prices are invented, and payments use the PayPal sandbox, so no real money moves.</p>
+  </footer>
 
   <script src="shop.js"></script>
 </body>
