@@ -59,7 +59,7 @@ Cut out mid-sentence.
 
 *Narration (5 s), screen still black:*
 
-> "No screen, no PayPal page, no mouse. Money only moves on a yes said right after the exact total, and 'yeah, wait' doesn't count."
+> "No screen, no PayPal page, no mouse. Say yes the way you'd say it, right after the exact total. 'Yeah, wait' won't pay."
 
 The actual totals depend on what Claude picks. Re-record until the edit reads naturally, and update the captions to match.
 
