@@ -12,7 +12,7 @@
 |---|---|
 | Fills the cart, then sends you to a visual payment page | Links PayPal once (PayPal Vault); every later checkout is voice-only |
 | Trusts the AI's numbers | The AI only picks products; every price, total and refund amount comes from the backend |
-| Any "ok" can trigger a purchase | Money moves only on "yes", "yes, pay" or "confirm", straight after the exact total is spoken, and each yes works once |
+| A stray "ok" at any point can trigger a purchase | A yes counts only straight after the exact total is spoken, it has to be only a yes ("yeah, go ahead" pays, "yeah, wait" doesn't), and each yes works once |
 | No guard against mistakes | A per-order spending limit the shopper sets by voice; raising it needs a yes |
 | Anyone in the room can say "yes" | An optional PIN, typed and never spoken, after the yes; 3 wrong tries lock payments |
 | Refunds mean calling support | "Refund just the batteries" gives a partial refund through PayPal Payments v2, spoken back first |
@@ -79,7 +79,7 @@ You link your PayPal account **once**, in a popup that EchoCart talks you throug
 
 The safety rules are enforced in code, not left to the AI's instructions:
 
-- **A yes counts only straight after the backend has spoken the exact total**, and only "yes", "yes, pay" or "confirm" are accepted. "Yeah", "yes please", "ok" and everything else count as no; EchoCart reads the cart again and asks for a clear yes.
+- **A yes counts only straight after the backend has spoken the exact total.** People say yes in many ways, so "yeah, go ahead", "sure, pay now" and "ok" all count. But the whole reply has to be agreement: "yes, but take out the coffee", "yeah, wait" or "pay later" isn't a yes, and EchoCart reads the cart again and asks. Words that name an action only agree to that action, so "yes, pay" can't confirm a refund.
 - **Each yes is single-use and tied to a fingerprint of the cart that was read back.** If the cart changes, or anything else is said in between, the yes no longer counts.
 - **Refunds, unlinking PayPal, and raising or removing the spending limit** each have their own read-back and yes. A yes given for one can't authorise another.
 - **The spending limit is checked twice:** an over-limit cart is never offered for a yes, and the payment step checks again.
@@ -87,7 +87,7 @@ The safety rules are enforced in code, not left to the AI's instructions:
 - **The optional PIN is a second step, never a shortcut.** It only completes a valid yes. Saying anything else cancels it, and three wrong tries lock payments and account changes for 10 minutes. It's stored as a salted scrypt hash and goes to its own endpoint, so it never reaches the conversation, the speech engine or the logs.
 - **When PayPal doesn't answer**, EchoCart doesn't pretend nothing happened. It says it can't tell yet, and paying the same cart again reuses the same PayPal request id, so PayPal returns the first order instead of charging twice. We found this case in a real sandbox run, where one create took over 30 seconds.
 
-These rules are covered by 115 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
+These rules are covered by 117 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
 
 ## Accessibility choices
 

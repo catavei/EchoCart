@@ -32,7 +32,7 @@ class SpendingLimit(DialogBase):
         r = self.say("raise my limit to 20 euros")
         self.assertEqual(r.awaiting, "limit")
         self.assertEqual(self.store.spending_limit, Decimal("8"))
-        self.say("yeah")                             # not a clear yes: asks again
+        self.assertTrue(self.say("yeah, I think so").speech.startswith("Sorry, was that a yes?"))
         self.assertEqual(self.store.spending_limit, Decimal("8"))
         self.say("yes")
         self.assertEqual(self.store.spending_limit, Decimal("20"))

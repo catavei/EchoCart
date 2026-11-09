@@ -51,17 +51,15 @@ Cut out mid-sentence.
 > **[Space.]** **You:** "Make the batteries two packs."
 > **EchoCart:** "Updated. Your cart: … quantity two … Total 10 euros 97 cents. … Say yes to pay, or tell me what to change."
 
-**Show the safety rule (keep this short):**
+**Pay the way you'd say it:**
 
 > **You:** "Yeah, go ahead."
-> **EchoCart:** "I need a clear yes before paying. Your cart: … Total 10 euros 97 cents…"
-> **You:** "Yes."
 > **[Three-note success chime.]**
 > **EchoCart:** "Payment done. Order number ending 7, 1, 5, T. Charged 10 euros 97 cents. Delivery tomorrow, Saturday 7 November."
 
 *Narration (5 s), screen still black:*
 
-> "No screen, no PayPal page, no mouse. And a 'yeah' isn't a yes: money only moves on a clear yes, said right after it hears the exact total."
+> "No screen, no PayPal page, no mouse. Money only moves on a yes said right after the exact total, and 'yeah, wait' doesn't count."
 
 The actual totals depend on what Claude picks. Re-record until the edit reads naturally, and update the captions to match.
 

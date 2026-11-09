@@ -57,7 +57,8 @@ _READ_CART = re.compile(r"\b(read|repeat|what s in|whats in|what is in) (me )?(m
 _CANCEL = re.compile(r"^(cancel( that| it| order)?|start over|never mind|empty (my |the )?cart|clear (my |the )?cart|stop)$")
 _HELP = re.compile(r"^(help|help me|what can i say|ajutor)$")
 _NO = re.compile(r"^(no|nope|not now|don t|do not|wait|keep it|nu)\b")
-_NEAR_YES = re.compile(r"^(yes|yeah|yep|ok|okay|sure|da|go ahead|pay|refund it)\b")
+# Starts like a yes but says something else too ("yeah, wait", "yes I think so"): ask again.
+_NEAR_YES = re.compile(r"^(yes|yeah|yep|yup|ok|okay|sure|alright|go ahead|pay|refund it)\b")
 _UNLINK = re.compile(r"\b(unlink|disconnect|forget|remove|delete) (my )?pay ?pal\b")
 _LINK = re.compile(r"\b(link|connect) (my )?pay ?pal\b")
 _REFUND = re.compile(r"\b(refund|money back|ramburs)")
@@ -287,11 +288,11 @@ class Conversation:
         return self._say_limit("Okay, I haven't changed it. ")
 
     def _reask(self, armed: ConfirmKind) -> Reply:
-        prefix = "I need a clear yes. "
+        prefix = "Sorry, was that a yes? "
         if armed == "payment" and self.cart:
-            return self._propose("I need a clear yes before paying. ")
+            return self._propose(prefix)
         if armed == "refund" and self.refund_plan:
-            return self._speak_refund("I need a clear yes before refunding. ")
+            return self._speak_refund(prefix)
         if armed == "unlink":
             return self._offer_unlink(prefix)
         return self._request_limit(self.pending_limit, prefix)

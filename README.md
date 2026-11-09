@@ -15,7 +15,7 @@ Online checkout assumes you can see the page. Screen readers help, but checkouts
 EchoCart is designed around three things a blind shopper needs to trust a payment:
 
 1. **Hearing exactly what you're paying for** just before you pay: the items, quantities, total and delivery date, in plain speech.
-2. **A yes that means yes.** Money moves only after a clear "yes" given right after that read-back. Anything else counts as no.
+2. **A yes that means yes.** Money moves only after a yes given right after that read-back. Say it any way you like ("yeah, go ahead", "sure, pay"), but "yes, but…" or "yeah, wait" isn't a yes.
 3. **No sighted step at checkout.** You link your PayPal account once, in a screen-reader-friendly window. After that, checkout happens entirely by voice.
 
 ## How it works
@@ -45,7 +45,7 @@ EchoCart is designed around three things a blind shopper needs to trust a paymen
 
 | Rule | Where |
 |---|---|
-| Money moves only after "yes", "yes, pay" or "confirm", said right after the backend spoke the exact total | `safety.ConfirmationGate`, `dialog.Conversation._say` |
+| Money moves only after a yes said right after the backend spoke the exact total. Any everyday yes works ("yeah, go ahead", "sure, pay now", "ok"), but the whole reply must be agreement: one other word ("but", "wait", "later", a product) and it isn't a yes, so EchoCart asks again. "Pay" only agrees to a payment and "refund" only to a refund | `safety.is_confirmation`, `safety.ConfirmationGate`, `dialog.Conversation._say` |
 | If the cart changes, or anything else is said, the yes no longer counts; a new read-back and a new yes are required | `ConfirmationGate.consume` checks the cart fingerprint; every non-read-back reply disarms it |
 | Refunds, unlinking PayPal, and raising or removing the spending limit each need their own read-back and yes. A yes given for one can't approve another | `ConfirmationGate` kinds `payment` / `refund` / `unlink` / `limit` |
 | An order over the spending limit is never offered for a yes, and the payment step checks the limit again | `dialog.Conversation._propose`, `_pay` |
@@ -160,7 +160,7 @@ Everything else in the feed (descriptions, images, dates) is ignored. The feed i
 | "two packs of AA batteries under 10 euros" | Builds a cart within your budget and reads it back. |
 | "double a batteries", "baterii AA", "hârtie igienică" | Misheard words and Romanian product names work too. |
 | "remove the batteries", "make it three", "cheaper option", "add some sponges" | Changes the cart and reads it back. You need to say yes again. |
-| "yes", "yes, pay", "confirm" | Pays, but only straight after a read-back. |
+| "yes", "yeah, go ahead", "sure, pay" | Pays, but only straight after a read-back. "Yeah, wait" or "yes, I think so" gets the question again. |
 | "no" | Doesn't pay. The cart stays. |
 | "repeat", "read my cart" | Says the last thing again, or reads the cart back. |
 | "cancel" | Empties the cart. |
@@ -214,10 +214,10 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 115 tests:
+The suite has 117 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
-- **Safety rules** (`test_safety.py`): no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
+- **Safety rules** (`test_safety.py`): the everyday ways to say yes, and the replies that only sound like one; no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
 - **30 spoken requests** (`tests/fixtures/utterances.json`) run against the offline parser, covering budgets, "double a", Romanian names, an over-budget case, out of stock, unclear requests and edits. `test_llm.py` also covers the Claude client against a mocked API.
 - **PayPal against a mocked API** (`test_paypal_mock.py`): the vault flow, the audit log, and the sandbox-only guard.
 - **Whole conversations** (`test_dialog.py`): link → buy → receipt → refund, plus the popup fallback, run through the HTTP API.

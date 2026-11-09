@@ -1,7 +1,8 @@
 """Safety rules, enforced in code.
 
-1. Money moves only after an explicit confirmation ("yes", "yes, pay",
-   "confirm") given right after the backend itself spoke the exact total.
+1. Money moves only after a yes ("yes", "yeah, go ahead", "sure, pay")
+   given right after the backend itself spoke the exact total. The whole
+   reply must be agreement: "yes, but...", "yeah, wait" or "pay later" isn't a yes.
 2. Any change to the cart, or anything else spoken in between, voids the yes.
 3. Refunds go through the same gate.
 4. LLM output is validated: schema, catalogue ids, stock, stated budget.
@@ -19,7 +20,23 @@ from pydantic import BaseModel, Field, ValidationError
 from .cart import MAX_QUANTITY, Catalog, CartError, PricedCart, price_cart, say_eur
 
 # ---- 1-3. confirmation gate -----------------------------------------------
-ACCEPTED_CONFIRMATIONS = frozenset({"yes", "yes pay", "confirm"})
+# People say yes in many ways, so a yes is any reply made only of words of agreement, with at
+# least one that agrees on its own. One other word ("but", "wait", "not", "later", a product)
+# and it isn't a yes. Words that name an action only agree to that action: "pay" never refunds.
+_AGREE = frozenset({"yes", "yeah", "yea", "yep", "yup", "sure", "ok", "okay", "confirm", "confirmed",
+                    "absolutely", "definitely", "correct", "alright"})
+_AGREE_PHRASES = ("go ahead", "do it", "go for it", "sounds good", "that s right", "that is right", "that s fine",
+                  "of course", "please do", "all right")
+_ACTION_WORDS = {
+    "payment": frozenset({"pay", "buy", "purchase", "checkout", "place"}),
+    "refund": frozenset({"refund"}),
+    "unlink": frozenset({"unlink", "disconnect", "remove"}),
+    "limit": frozenset({"change", "set", "raise", "remove", "update"}),
+}
+# Words that may go with a yes but don't agree by themselves ("please", "now", "go", "fine").
+_WITH_A_YES = frozenset({"please", "now", "it", "that", "s", "is", "and", "then", "go", "ahead", "do", "for",
+                         "thanks", "thank", "you", "the", "my", "order", "right", "fine", "good", "sounds",
+                         "of", "course", "all", "with", "paypal", "check", "out", "um", "uh", "er", "oh"})
 
 
 def normalize_utterance(text: str) -> str:
@@ -28,8 +45,15 @@ def normalize_utterance(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip()
 
 
-def is_confirmation(text: str) -> bool:
-    return normalize_utterance(text) in ACCEPTED_CONFIRMATIONS
+def is_confirmation(text: str, kind: ConfirmKind = "payment") -> bool:
+    """True if the whole reply agrees to `kind`: "yes", "yeah, go ahead", "sure, pay now"."""
+    words = normalize_utterance(text).replace("'", " ").split()
+    actions = _ACTION_WORDS[kind]
+    if not words or any(w not in _AGREE and w not in actions and w not in _WITH_A_YES for w in words):
+        return False
+    said = f" {' '.join(words)} "
+    return (any(w in _AGREE or w in actions for w in words)
+            or any(f" {p} " in said for p in _AGREE_PHRASES))
 
 
 # payment / refund move money; unlink removes the saved PayPal account;
@@ -72,7 +96,7 @@ class ConfirmationGate:
             pending is not None
             and pending.kind == kind
             and pending.fingerprint == current_fingerprint
-            and is_confirmation(utterance)
+            and is_confirmation(utterance, kind)
         )
 
 

@@ -133,11 +133,18 @@ class PurchaseFlow(DialogBase):
         [order] = self.orders_created()
         self.assertEqual(order["purchase_units"][0]["amount"]["value"], "13.77")  # 3 x 4.59
 
-    def test_near_yes_rereads_instead_of_paying(self):
+    def test_a_natural_yes_pays(self):
         self.link()
         self.say("two packs of AA batteries")
-        r = self.say("yes please")
-        self.assertTrue(r.speech.startswith("I need a clear yes"))
+        self.assertIn("Payment done", self.say("Yeah, go ahead.").speech)
+        self.assertEqual(len(self.orders_created()), 1)
+
+    def test_a_hesitant_yes_asks_again_instead_of_paying(self):
+        self.link()
+        self.say("two packs of AA batteries")
+        r = self.say("yeah, wait")
+        self.assertTrue(r.speech.startswith("Sorry, was that a yes? Your cart:"))
+        self.assertIn("Total 9 euros 18 cents.", r.speech)
         self.assertEqual(self.orders_created(), [])
         self.say("yes")
         self.assertEqual(len(self.orders_created()), 1)

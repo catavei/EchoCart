@@ -15,14 +15,26 @@ def cart_of(*items):
 
 
 class ConfirmationPhrases(unittest.TestCase):
-    def test_accepted(self):
-        for phrase in ["yes", "Yes.", "YES, pay", "yes pay!", "Confirm", "  confirm  "]:
+    def test_the_ways_people_say_yes(self):
+        for phrase in ["yes", "Yes.", "YES, pay", "yes pay!", "Confirm", "  confirm  ", "yeah", "Yeah, go ahead.",
+                       "yes please", "ok", "Okay.", "sure", "Sure, pay now.", "yep", "yes yes", "confirmed",
+                       "pay", "go ahead", "That's right.", "do it", "um yes", "yes, place the order",
+                       "yes, thank you", "absolutely"]:
             self.assertTrue(is_confirmation(phrase), phrase)
 
-    def test_everything_else_is_no(self):
-        for phrase in ["yeah", "yes please", "ok", "sure", "yes but remove the batteries",
-                       "no", "", "confirmed", "pay", "da", "yes yes"]:
+    def test_anything_more_than_agreement_is_not_a_yes(self):
+        for phrase in ["", "no", "yes but remove the batteries", "yeah wait", "yes no", "not yet", "don't pay",
+                       "pay later", "no, don't do it", "maybe", "I guess", "yes I think so", "ok so add milk",
+                       "yeah hold on", "go", "fine", "thanks", "right", "da", "refund it", "yes, two more"]:
             self.assertFalse(is_confirmation(phrase), phrase)
+
+    def test_action_words_only_agree_to_their_own_action(self):
+        self.assertTrue(is_confirmation("yes, refund it", "refund"))
+        self.assertFalse(is_confirmation("yes, refund it", "payment"))
+        self.assertFalse(is_confirmation("yes pay", "refund"))
+        self.assertTrue(is_confirmation("yeah, remove it", "unlink"))
+        self.assertFalse(is_confirmation("yeah, remove it", "payment"))
+        self.assertTrue(is_confirmation("sure", "limit"))
 
 
 class PaymentGate(unittest.TestCase):
