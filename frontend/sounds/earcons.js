@@ -32,7 +32,9 @@
 
   // Matching vibration patterns on phones, for shoppers who are also hard of hearing.
   function buzz(pattern) {
-    try { if (navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* not supported */ }
+    // Browsers refuse vibration before the first tap or key press; don't ask until then.
+    const active = !navigator.userActivation || navigator.userActivation.hasBeenActive;
+    try { if (active && navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* not supported */ }
   }
 
   window.Earcons = {
