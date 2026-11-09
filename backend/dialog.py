@@ -22,6 +22,7 @@ import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
 from typing import Callable, Literal
 
 from .cart import Catalog, CartError, PricedCart, price_cart, readback, say_date, say_eur
@@ -108,6 +109,7 @@ class Deps:
     matcher: OfflineCartParser | None = None
     now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
     shop_name: str = "Demo shop"   # shown on the demo shop page (/shop/)
+    shoppers_dir: Path | None = None  # set: each browser is its own shopper (hosted demo)
 
     def __post_init__(self):
         if self.matcher is None:

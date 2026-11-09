@@ -108,9 +108,24 @@ python -m venv .venv
 
 (On Windows, use `.venv\Scripts\` instead of `.venv/bin/`.)
 
-### Sandbox test accounts for judges
+### Try it without installing anything (for judges)
 
-> **To do before submitting:** add a sandbox *Personal* buyer login here, or tell judges to use one from their own sandbox. Sandbox credentials move no real money, but never put live credentials or your Anthropic key in this repository.
+**Hosted demo: <https://ECHOCART-URL.onrender.com>** (PayPal sandbox; no real money moves). Open it in Chrome or Edge.
+
+To pay, link PayPal with this sandbox **buyer** account when the PayPal window asks you to log in:
+
+- Email: `SANDBOX-BUYER-EMAIL`
+- Password: `SANDBOX-BUYER-PASSWORD`
+
+Then follow [First purchase](#4-first-purchase) from step 1.
+
+- **Your own shopper.** Each browser gets its own linked PayPal account, orders, spending limit and PIN, so several people can try the demo at the same time. Reloading the page keeps them; a private window starts afresh.
+- **The first visit can take about a minute** while the free server wakes up. A restart of the server also forgets the linked accounts, so you may be asked to link PayPal again.
+- **Running it yourself** works too, with the setup above and your own sandbox app.
+
+#### Hosting it on Render
+
+[`render.yaml`](render.yaml) describes the service. In the Render dashboard choose **New > Blueprint**, pick this repository, and fill in `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` and (optionally) `ANTHROPIC_API_KEY`. Leave the key empty to run the offline parser. If you set it, give the key a monthly spend limit in the Anthropic Console first, because anyone with the link can talk to the demo. Render sets the public address itself (`RENDER_EXTERNAL_URL`), so PayPal returns to the right page with no extra setting.
 
 ---
 
@@ -130,6 +145,7 @@ All settings come from environment variables or `.env`.
 | `CATALOG_URL` | empty | A merchant's product feed, as a URL or a file path. Empty means the demo catalogue. See [Use a merchant's own catalogue](#use-a-merchants-own-catalogue). |
 | `SHOP_NAME` | `Demo shop` | The shop's name on the demo shop page (`/shop/`). |
 | `DATA_DIR` | `./data` | Holds `store.json` (linked account and orders) and `payments.jsonl` (audit log). |
+| `SHOPPERS` | `single` | `single`: one shopper per server, in `store.json`. `per_browser`: each browser gets its own shopper (linked PayPal, orders, limit, PIN) in `DATA_DIR/shoppers/`, for a hosted demo. |
 
 ## Use a merchant's own catalogue
 
@@ -227,7 +243,7 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 122 tests:
+The suite has 127 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
 - **Safety rules** (`test_safety.py`): the everyday ways to say yes, and the replies that only sound like one; no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
@@ -238,6 +254,7 @@ The suite has 122 tests:
 - **PayPal not answering** (`test_paypal_mock.py`, `test_dialog.py`): retries reuse the same request id, the reply never claims nothing was charged, and a second yes can't create a second order.
 - **Merchant product feeds** (`test_feed.py`): the Shopify-style feed becomes products with the right names, prices, stock and delivery; unusable feeds are refused; loading by URL or file; and a whole voice purchase from the sample pharmacy feed.
 - **The demo shop page** (`test_shop.py`): the shop's product list comes from the same catalogue, with stock; the page is served; Add to basket adds to the same cart and reads it back, waiting for a yes; out-of-stock and unknown products are refused.
+- **The hosted demo** (`test_hosted.py`): each browser gets its own shopper and keeps it after a reload or restart, made-up ids get a fresh shopper, and the local single-shopper mode is unchanged.
 - **The PIN** (`test_pin.py`): hashing, lockout and expiry, yes then PIN, the PIN alone never pays, anything said cancels the PIN step, the amount threshold, limit and unlink need it, refunds don't, changing it needs the current PIN, and the PIN never appears in replies or the store file.
 
 **Manual end-to-end check against the real sandbox:** run this once with your `.env` filled in. It links a sandbox buyer, pays 1.00 EUR with no approval page, and refunds it.
@@ -261,7 +278,7 @@ tests/     unit tests, fixtures/utterances.json, manual/vault_spike.py
 
 ## Known limitations
 
-- **Single shopper per server.** Conversations are kept in memory, and the linked account and order history sit in one JSON file. That suits a demo, not production.
+- **No accounts.** Locally there's one shopper per server. With `SHOPPERS=per_browser` each browser is its own shopper, identified by a random id it keeps; clearing the browser's data loses it. Shoppers are JSON files, which suits a demo, not production.
 - **No fraud-prevention data yet.** PayPal recommends sending fraud-prevention ("risk") data with payments that use a saved account; EchoCart doesn't include PayPal's FraudNet script yet.
 - **Speech recognition depends on the browser.** Chrome sends audio to Google's speech service; Safari doesn't support recognition at all, so the typing box is used.
 - **The product names and brands in the catalogue are invented**, and so is the sample pharmacy feed.

@@ -1,0 +1,29 @@
+# Render Blueprint for the hosted EchoCart demo (PayPal sandbox only).
+# Render dashboard > New > Blueprint > pick this repository. Render asks for the three secrets below.
+services:
+  - type: web
+    name: echocart
+    runtime: docker
+    plan: free
+    healthCheckPath: /api/status
+    autoDeploy: true
+    envVars:
+      # Each browser gets its own shopper (linked PayPal, orders, limit, PIN), so judges
+      # trying the demo at the same time never share a cart or a PayPal account.
+      - key: SHOPPERS
+        value: per_browser
+      - key: PAYPAL_API_BASE
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      # Leave ANTHROPIC_API_KEY empty to run the offline parser. If you set it,
+      # set a monthly spend limit for the key in the Anthropic Console first.
+      - key: LLM_MODE
+        value: anthropic
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ANTHROPIC_EFFORT
+        value: low
+      # APP_BASE_URL is not needed: EchoCart uses Render's RENDER_EXTERNAL_URL.

@@ -43,6 +43,9 @@ class Settings:
     data_dir: Path
     catalog_url: str = ""   # merchant product feed (URL or file); empty = built-in catalogue
     shop_name: str = "Demo shop"   # the name on the demo shop page
+    # "single": one shopper per server (data/store.json). "per_browser": each browser gets its own
+    # linked PayPal, orders, limit and PIN, so a hosted demo can be tried by several judges at once.
+    shoppers: str = "single"
 
     def assert_sandbox(self) -> None:
         if self.paypal_api_base.rstrip("/") != SANDBOX_API_BASE:
@@ -63,10 +66,12 @@ def get_settings() -> Settings:
         anthropic_api_key=env("ANTHROPIC_API_KEY", ""),
         anthropic_model=env("ANTHROPIC_MODEL", "claude-opus-5-5"),
         anthropic_effort=env("ANTHROPIC_EFFORT", "low"),
-        app_base_url=env("APP_BASE_URL", "http://localhost:8000").rstrip("/"),
+        # Render sets RENDER_EXTERNAL_URL to the service's public https address.
+        app_base_url=(env("APP_BASE_URL") or env("RENDER_EXTERNAL_URL") or "http://localhost:8000").rstrip("/"),
         data_dir=Path(env("DATA_DIR", str(ROOT / "data"))),
         catalog_url=env("CATALOG_URL", "").strip(),
         shop_name=env("SHOP_NAME", "").strip() or "Demo shop",
+        shoppers="per_browser" if env("SHOPPERS", "").strip().lower() == "per_browser" else "single",
     )
     settings.assert_sandbox()
     return settings

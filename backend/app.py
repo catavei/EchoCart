@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import html
 import logging
+import re
+import uuid
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 
@@ -24,11 +27,17 @@ log = logging.getLogger("echocart")
 
 FRONTEND = ROOT / "frontend"
 MAX_SESSIONS = 200
+MAX_SHOPPERS = 500          # per_browser mode: shopper stores kept in memory
+SHOPPER_ID = re.compile(r"[0-9a-f]{32}")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 class SessionRef(BaseModel):
     session_id: str
+
+
+class NewSession(BaseModel):
+    shopper_id: str | None = Field(default=None, max_length=32)
 
 
 class Utterance(SessionRef):
@@ -54,7 +63,9 @@ class PinRemoval(SessionRef):
 
 
 def build_deps() -> Deps:
-    settings = get_settings()  # raises LiveCredentialsRefused unless sandbox
+    settings = get_settings()
+    if settings.shoppers == "per_browser":
+        log.info("Shoppers: one per browser, stored in %s", settings.data_dir / "shoppers")  # raises LiveCredentialsRefused unless sandbox
     catalog = load_catalog(settings.catalog_url)
     paypal = None
     if settings.paypal_client_id and settings.paypal_client_secret:
@@ -65,7 +76,8 @@ def build_deps() -> Deps:
     log.info("LLM mode: %s, model: %s", settings.llm_mode, settings.anthropic_model)
     return Deps(catalog=catalog, parser=make_parser(settings, catalog), paypal=paypal,
                 store=Store(settings.data_dir / "store.json"),
-                base_url=settings.app_base_url, shop_name=settings.shop_name)
+                base_url=settings.app_base_url, shop_name=settings.shop_name,
+                shoppers_dir=settings.data_dir / "shoppers" if settings.shoppers == "per_browser" else None)
 
 
 class _RevalidatingStatic(StaticFiles):
@@ -78,7 +90,7 @@ class _RevalidatingStatic(StaticFiles):
 
 
 def create_app(deps: Deps | None = None) -> FastAPI:
-    state: dict = {"deps": deps, "sessions": {}}
+    state: dict = {"deps": deps, "sessions": {}, "shoppers": {}}
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -113,14 +125,34 @@ def create_app(deps: Deps | None = None) -> FastAPI:
                               "price_eur": str(p.price_eur), "category": p.category, "in_stock": p.stock > 0}
                              for p in d.catalog]}
 
+    def shopper_deps(shopper_id: str | None) -> tuple[Deps, str | None]:
+        """per_browser mode: this browser's own store (linked PayPal, orders, limit, PIN).
+
+        The id is made here, never chosen by the browser, and the browser keeps it to come back
+        to the same shopper. An unknown or malformed id gets a fresh shopper.
+        """
+        d = state["deps"]
+        if d.shoppers_dir is None:
+            return d, None
+        shoppers = state["shoppers"]
+        if not (shopper_id and SHOPPER_ID.fullmatch(shopper_id)
+                and (shopper_id in shoppers or (d.shoppers_dir / f"{shopper_id}.json").is_file())):
+            shopper_id = uuid.uuid4().hex
+        store = shoppers.pop(shopper_id, None) or Store(d.shoppers_dir / f"{shopper_id}.json")
+        shoppers[shopper_id] = store          # most recently used last
+        if len(shoppers) > MAX_SHOPPERS:
+            shoppers.pop(next(iter(shoppers)))
+        return replace(d, store=store), shopper_id
+
     @app.post("/api/session")
-    def new_session():
+    def new_session(body: NewSession | None = None):
         sessions = state["sessions"]
         if len(sessions) >= MAX_SESSIONS:
             sessions.pop(next(iter(sessions)))
-        conv = Conversation(state["deps"])
+        deps, shopper_id = shopper_deps(body.shopper_id if body else None)
+        conv = Conversation(deps)
         sessions[conv.session_id] = conv
-        return {"session_id": conv.session_id, **conv.welcome().to_json()}
+        return {"session_id": conv.session_id, "shopper_id": shopper_id, **conv.welcome().to_json()}
 
     @app.post("/api/utterance")
     async def utterance(body: Utterance):

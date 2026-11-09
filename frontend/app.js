@@ -190,9 +190,14 @@
     }
   }
 
+  // A hosted demo gives each browser its own shopper (linked PayPal, orders, PIN); the id
+  // keeps it across reloads. Locally there is one shopper and the server returns no id.
+  function savedShopper() { try { return localStorage.getItem("echocart-shopper"); } catch (e) { return null; } }
+
   async function startSession() {
-    const reply = await post("/api/session");
+    const reply = await post("/api/session", { shopper_id: savedShopper() });
     sessionId = reply.session_id;
+    if (reply.shopper_id) { try { localStorage.setItem("echocart-shopper", reply.shopper_id); } catch (e) {} }
     tellShop(reply);
     // Browsers block speech before the first key press, so the welcome is shown and announced only.
     renderCart(reply.cart);

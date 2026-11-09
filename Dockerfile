@@ -12,4 +12,5 @@ COPY examples ./examples
 
 ENV DATA_DIR=/app/data
 EXPOSE 8000
-CMD ["uvicorn", "backend.app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Hosts such as Render choose the port through $PORT.
+CMD ["sh", "-c", "exec uvicorn backend.app:app --host 0.0.0.0 --port ${PORT:-8000}"]
