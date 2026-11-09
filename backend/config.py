@@ -6,6 +6,7 @@ passes .env through on its own.
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -42,7 +43,7 @@ class Settings:
     app_base_url: str
     data_dir: Path
     catalog_url: str = ""   # merchant product feed (URL or file); empty = built-in catalogue
-    shop_name: str = "Demo shop"   # the name on the demo shop page
+    shop_origins: tuple[str, ...] = ()   # shop websites allowed to show EchoCart (embed.js)
     # "single": one shopper per server (data/store.json). "per_browser": each browser gets its own
     # linked PayPal, orders, limit and PIN, so a hosted demo can be tried by several judges at once.
     shoppers: str = "single"
@@ -53,6 +54,24 @@ class Settings:
                 f"PAYPAL_API_BASE must be {SANDBOX_API_BASE}; got {self.paypal_api_base!r}. "
                 "EchoCart only ever talks to the PayPal sandbox."
             )
+
+
+_ORIGIN = re.compile(r"https?://[a-z0-9.-]+(:[0-9]{1,5})?")
+
+
+def parse_origins(raw: str) -> tuple[str, ...]:
+    """SHOP_ORIGINS: comma-separated shop addresses, like https://shop.example. Each is a scheme,
+    a host and maybe a port, nothing else, because the browser compares them exactly."""
+    origins = []
+    for part in raw.split(","):
+        origin = part.strip().rstrip("/").lower()
+        if not origin:
+            continue
+        if not _ORIGIN.fullmatch(origin):
+            raise ValueError(f"SHOP_ORIGINS: {part.strip()!r} isn't a website address like https://shop.example "
+                             "(no path, no spaces).")
+        origins.append(origin)
+    return tuple(dict.fromkeys(origins))
 
 
 def get_settings() -> Settings:
@@ -70,7 +89,7 @@ def get_settings() -> Settings:
         app_base_url=(env("APP_BASE_URL") or env("RENDER_EXTERNAL_URL") or "http://localhost:8000").rstrip("/"),
         data_dir=Path(env("DATA_DIR", str(ROOT / "data"))),
         catalog_url=env("CATALOG_URL", "").strip(),
-        shop_name=env("SHOP_NAME", "").strip() or "Demo shop",
+        shop_origins=parse_origins(env("SHOP_ORIGINS", "")),
         shoppers="per_browser" if env("SHOPPERS", "").strip().lower() == "per_browser" else "single",
     )
     settings.assert_sandbox()

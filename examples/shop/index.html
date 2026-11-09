@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Demo shop</title>
+  <title>Linden Street Pharmacy (demo shop)</title>
   <meta name="description" content="A demo pharmacy shop with EchoCart added as its voice checkout.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,9 +11,10 @@
   <link rel="stylesheet" href="shop.css">
 </head>
 <body>
-  <!-- A demo of how a merchant adds EchoCart to their own website: the products come from the
-       same catalogue EchoCart sells from, Add to basket fills the same cart, and the basket and
-       order confirmation follow the voice conversation. -->
+  <!-- A demo shop website, served on its own address, separate from EchoCart. It lists the
+       products in its own feed (../linden-street-pharmacy.json), which EchoCart reads too, and adds
+       EchoCart with one script tag (at the bottom). Add to basket fills the EchoCart cart, and the
+       basket and order confirmation follow the voice conversation. -->
   <a class="skip" href="#results">Skip to products</a>
 
   <p class="promo">Free delivery on orders over €25. Order by 4 pm for delivery tomorrow.</p>
@@ -24,7 +25,7 @@
         <path d="M24 44c-1-6-3-9-8-12C8 27 5 21 7 14c2-6 9-9 14-5 1 1 2 2 3 4 1-2 2-3 3-4 5-4 12-1 14 5 2 7-1 13-9 18-5 3-7 6-8 12z" fill="currentColor"/>
         <path d="M24 42V16M24 30l-7-6M24 24l6-6" stroke="var(--paper)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
       </svg>
-      <span id="shop-name" class="logo-name">Demo shop</span>
+      <span class="logo-name">Linden Street Pharmacy</span>
     </a>
 
     <form class="search" role="search" id="search-form">
@@ -123,14 +124,16 @@
 
     <aside id="voice-panel" class="voice-panel" aria-labelledby="voice-heading" hidden>
       <h2 id="voice-heading">Shop by voice with EchoCart</h2>
-      <iframe id="voice-frame" title="EchoCart voice checkout" allow="microphone"></iframe>
+      <div id="voice-slot"></div>
     </aside>
   </div>
 
   <footer class="footer">
-    <p><strong id="footer-name">Demo shop</strong> is a demo for EchoCart. The products, brands and prices are invented, and payments use the PayPal sandbox, so no real money moves.</p>
+    <p><strong>Linden Street Pharmacy</strong> is a demo shop for EchoCart. The products, brands and prices are invented, and payments use the PayPal sandbox, so no real money moves.</p>
   </footer>
 
+  <!-- EchoCart: change this address to wherever your EchoCart runs. -->
+  <script src="http://localhost:8011/embed.js"></script>
   <script src="shop.js"></script>
 </body>
 </html>

@@ -114,6 +114,7 @@ def products_from_feed(feed: object) -> list[Product]:
                 id=pid, name=str(item["title"]).strip(), brand=str(item.get("vendor") or "").strip(),
                 pack_size=pack, price_eur=price, stock=_stock(v), delivery_days=delivery,
                 category=category, keywords=keywords + ([pack.lower()] if pack else []),
+                variant_id=str(v.get("id") or "").strip()[:100],
             ))
     if skipped:
         log.warning("Product feed: skipped %d entries without a title or a valid price", skipped)

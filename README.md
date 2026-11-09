@@ -143,7 +143,7 @@ All settings come from environment variables or `.env`.
 | `ANTHROPIC_EFFORT` | `low` | Lower effort means faster replies, which matters in a spoken conversation. |
 | `APP_BASE_URL` | `http://localhost:8000` | Where PayPal sends the popup back to. |
 | `CATALOG_URL` | empty | A merchant's product feed, as a URL or a file path. Empty means the demo catalogue. See [Use a merchant's own catalogue](#use-a-merchants-own-catalogue). |
-| `SHOP_NAME` | `Demo shop` | The shop's name on the demo shop page (`/shop/`). |
+| `SHOP_ORIGINS` | empty | The shop websites allowed to show EchoCart with `embed.js`, comma-separated, like `https://shop.example`. Empty: only EchoCart's own pages. See [Add EchoCart to a shop's website](#add-echocart-to-a-shops-website). |
 | `DATA_DIR` | `./data` | Holds `store.json` (linked account and orders) and `payments.jsonl` (audit log). |
 | `SHOPPERS` | `single` | `single`: one shopper per server, in `store.json`. `per_browser`: each browser gets its own shopper (linked PayPal, orders, limit, PIN) in `DATA_DIR/shoppers/`, for a hosted demo. |
 
@@ -170,16 +170,40 @@ The feed is the Shopify-style `products.json` shape (Shopify storefronts serve i
 
 Everything else in the feed (descriptions, images, dates) is ignored. The feed is read once at startup and holds up to 500 products, because the whole catalogue goes into Claude's prompt. The safety rules don't change: prices still come only from the feed, never from the model, and the voice checkout, PIN, limit and refunds work the same way. Payments go to the PayPal account whose credentials the app runs with, so each merchant runs EchoCart with their own PayPal app.
 
-### The demo shop page
+### Add EchoCart to a shop's website
 
-`/shop/` is a small shop website built from the same catalogue, to show EchoCart the way a merchant would add it. It's laid out like a real pharmacy's category page: search, categories, brand and price filters, sorting, and an **Add to basket** button on each product. A **Shop by voice** button opens EchoCart in a panel beside the products, with the keyboard focus on its Talk button. Add to basket fills the same EchoCart cart (`POST /api/cart/add`): EchoCart reads the cart back, so paying still needs the spoken yes. Each reply passes the cart and, after a payment, the receipt to the shop page, so the shop's own basket changes as you speak (new and changed lines and the total are highlighted) and an order confirmation appears once PayPal has the money. EchoCart still prices everything, reads it back and waits for the yes; the shop page only displays it.
+A shop adds EchoCart to its own pages with a script tag, the way it would add PayPal's buttons or a chat widget. EchoCart keeps running on its own address:
 
-```bash
-CATALOG_URL=examples/linden-street-pharmacy.json SHOP_NAME="Linden Street Pharmacy" uvicorn backend.app:app
-# then open http://localhost:8000/shop/
+```html
+<script src="https://YOUR-ECHOCART/embed.js"></script>
+<script>
+  // for example when the shopper presses "Shop by voice"
+  const voice = EchoCart.mount(document.getElementById("voice"), {
+    onCart(cart) { /* show the basket: lines, total, delivery date; null when empty */ },
+    onOrder(receipt) { /* show the order: PayPal order id, total, delivery date */ },
+  });
+  // optional: Add to basket buttons fill the same cart, by the variant id in the shop's feed
+  voice.add("4400101");
+</script>
 ```
 
-In this demo the shop page and EchoCart come from the same server. On a merchant's real site, EchoCart would be embedded from its own origin, and the page would accept its messages only from that origin.
+- **Only the shop's own sites.** List them in `SHOP_ORIGINS` (for example `https://shop.example`). EchoCart tells the browser, with a `frame-ancestors` header, that only those sites may show it in a frame, so no other site can wrap the checkout. Messages go only to that shop's page and are taken only from it.
+- **EchoCart still runs the checkout.** It prices the cart, reads it back and waits for the spoken yes. Add to basket (`POST /api/cart/add`) ends in the same read-back, so it never pays. The shop's page only shows the basket and the order.
+- **The shop's own products.** EchoCart reads the same feed the shop publishes (`CATALOG_URL`), so the variant ids on the shop's buttons are ones EchoCart knows.
+
+#### The demo shop
+
+[`examples/shop/`](examples/shop/) is a pharmacy website made for the demo, laid out like a real one: search, categories, brand and price filters, sorting, and an **Add to basket** button on each product. It builds its pages from its own feed, [`examples/linden-street-pharmacy.json`](examples/linden-street-pharmacy.json), and adds EchoCart with `embed.js`. The shop and EchoCart run on two different addresses, as they would for a real shop:
+
+```bash
+# the shop's website, on port 8012
+python -m http.server 8012 --bind 127.0.0.1 --directory examples
+# EchoCart, on port 8011, reading the shop's feed and allowing the shop's site
+CATALOG_URL=http://localhost:8012/linden-street-pharmacy.json SHOP_ORIGINS=http://localhost:8012 APP_BASE_URL=http://localhost:8011 uvicorn backend.app:app --port 8011
+# then open http://localhost:8012/shop/
+```
+
+**Shop by voice** opens EchoCart in a panel beside the products, with the keyboard focus on its Talk button. As you speak, the shop's own basket changes (new and changed lines and the total are highlighted), and an order confirmation appears once PayPal has the money. The shop's page links to `http://localhost:8011/embed.js`; for another address, change that line.
 
 ## What you can say
 
@@ -243,7 +267,7 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 127 tests:
+The suite has 129 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
 - **Safety rules** (`test_safety.py`): the everyday ways to say yes, and the replies that only sound like one; no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
@@ -253,7 +277,7 @@ The suite has 127 tests:
 - **The newer features** (`test_features.py`): spending limit (including that a limit yes can't pay), reorder, order status and history, partial refunds with exact remainders, unlink, and product questions.
 - **PayPal not answering** (`test_paypal_mock.py`, `test_dialog.py`): retries reuse the same request id, the reply never claims nothing was charged, and a second yes can't create a second order.
 - **Merchant product feeds** (`test_feed.py`): the Shopify-style feed becomes products with the right names, prices, stock and delivery; unusable feeds are refused; loading by URL or file; and a whole voice purchase from the sample pharmacy feed.
-- **The demo shop page** (`test_shop.py`): the shop's product list comes from the same catalogue, with stock; the page is served; Add to basket adds to the same cart and reads it back, waiting for a yes; out-of-stock and unknown products are refused.
+- **Shop websites** (`test_shop.py`): `embed.js` is served; only the sites in `SHOP_ORIGINS` may show EchoCart in a frame, and malformed addresses are refused at startup; the demo shop is its own site; Add to basket, by EchoCart's id or the shop's variant id, adds to the same cart and reads it back, waiting for a yes; out-of-stock and unknown products are refused.
 - **The hosted demo** (`test_hosted.py`): each browser gets its own shopper and keeps it after a reload or restart, made-up ids get a fresh shopper, and the local single-shopper mode is unchanged.
 - **The PIN** (`test_pin.py`): hashing, lockout and expiry, yes then PIN, the PIN alone never pays, anything said cancels the PIN step, the amount threshold, limit and unlink need it, refunds don't, changing it needs the current PIN, and the PIN never appears in replies or the store file.
 
@@ -271,7 +295,7 @@ Last run on 2026-11-09: the vaulted order came back `COMPLETED` straight from cr
 backend/   app.py (API + PayPal return pages), dialog.py (conversation), safety.py, pin.py, cart.py,
            llm.py (Claude + offline parser), paypal_client.py, store.py, config.py, feed.py,
            catalog.json (41 products), prompts/cart_system.md
-frontend/  index.html, app.js, styles.css, sounds/earcons.js; shop/ (the demo shop page)
+frontend/  index.html, app.js, styles.css, sounds/earcons.js; embed.js (for shop websites)
 examples/  linden-street-pharmacy.json (a sample merchant product feed)
 tests/     unit tests, fixtures/utterances.json, manual/vault_spike.py
 ```

@@ -112,15 +112,20 @@
     if (reply.pin_set && document.activeElement !== pinOver) pinOver.value = String(over);
   }
 
-  // Inside a shop's page (the demo shop at /shop/), EchoCart tells the page about each cart and
-  // receipt, so the shop's own basket and order confirmation follow the conversation.
+  // Inside a shop's website (through embed.js), EchoCart tells the page about each cart and
+  // receipt, so the shop's own basket and order confirmation follow the conversation. The server
+  // lets the browser show EchoCart in a frame only on the shops in SHOP_ORIGINS, so the page around
+  // us is one of them; messages go to that page only, and are taken from that page only.
   const embedded = window.parent !== window;
+  const shopOrigin = embedded ? (new URLSearchParams(location.search).get("shop") || location.origin) : null;
+  const ancestors = location.ancestorOrigins;
+  const shopKnown = embedded && (!ancestors || !ancestors.length || ancestors[0] === shopOrigin);
   if (embedded) {
     document.documentElement.classList.add("embedded");
     $("cart").closest("section").hidden = true;   // the shop shows the basket itself
   }
   function tellShop(reply) {
-    if (embedded) parent.postMessage({ type: "echocart:update", cart: reply.cart || null, receipt: reply.receipt || null }, location.origin);
+    if (shopKnown) parent.postMessage({ type: "echocart:update", cart: reply.cart || null, receipt: reply.receipt || null }, shopOrigin);
   }
 
   function handleReply(reply) {
@@ -393,7 +398,7 @@
 
   // The shop's Add to basket buttons ask EchoCart (in its panel) to add to the same cart. EchoCart
   // reads the cart back, so paying still needs the spoken yes. Only the shop page around us may ask.
-  if (embedded) {
+  if (shopKnown) {
     const adds = [];
     const drainAdds = async () => {
       if (!adds.length) return;
@@ -403,7 +408,7 @@
       drainAdds();
     };
     window.addEventListener("message", (event) => {
-      if (event.origin !== location.origin || event.source !== parent) return;
+      if (event.origin !== shopOrigin || event.source !== parent) return;
       const m = event.data;
       if (m && m.type === "echocart:add" && typeof m.product_id === "string") {
         adds.push({ product_id: m.product_id, name: String(m.name || "a product").slice(0, 120) });

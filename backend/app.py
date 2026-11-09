@@ -45,7 +45,7 @@ class Utterance(SessionRef):
 
 
 class AddProduct(SessionRef):
-    product_id: str = Field(min_length=1, max_length=100)
+    product_id: str = Field(min_length=1, max_length=100)   # EchoCart's id or the shop's variant id
 
 
 class PinEntry(SessionRef):
@@ -76,7 +76,7 @@ def build_deps() -> Deps:
     log.info("LLM mode: %s, model: %s", settings.llm_mode, settings.anthropic_model)
     return Deps(catalog=catalog, parser=make_parser(settings, catalog), paypal=paypal,
                 store=Store(settings.data_dir / "store.json"),
-                base_url=settings.app_base_url, shop_name=settings.shop_name,
+                base_url=settings.app_base_url, shop_origins=settings.shop_origins,
                 shoppers_dir=settings.data_dir / "shoppers" if settings.shoppers == "per_browser" else None)
 
 
@@ -116,14 +116,15 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         d = state["deps"]
         return {"linked": d.store.linked, "paypal_configured": d.paypal is not None}
 
-    @app.get("/api/catalog")
-    def catalog():
-        """The products for the demo shop page (/shop/): the same catalogue EchoCart sells from."""
+    @app.middleware("http")
+    async def only_listed_shops_may_frame(request, call_next):
+        """A shop shows EchoCart in a frame with embed.js. The browser allows that only on EchoCart
+        itself and on the shop websites in SHOP_ORIGINS, so no other site can wrap the checkout."""
+        response = await call_next(request)
         d = state["deps"]
-        return {"shop_name": d.shop_name,
-                "products": [{"id": p.id, "name": p.name, "brand": p.brand, "pack_size": p.pack_size,
-                              "price_eur": str(p.price_eur), "category": p.category, "in_stock": p.stock > 0}
-                             for p in d.catalog]}
+        allowed = " ".join(("'self'", *(d.shop_origins if d else ())))
+        response.headers["Content-Security-Policy"] = f"frame-ancestors {allowed}"
+        return response
 
     def shopper_deps(shopper_id: str | None) -> tuple[Deps, str | None]:
         """per_browser mode: this browser's own store (linked PayPal, orders, limit, PIN).
@@ -159,11 +160,12 @@ def create_app(deps: Deps | None = None) -> FastAPI:
         reply = await session(body.session_id).handle(body.text)
         return reply.to_json()
 
-    # The PIN never goes through /api/utterance, so it is never logged, parsed or spoken.
     @app.post("/api/cart/add")
     def cart_add(body: AddProduct):
+        """A shop's Add to basket button, through embed.js."""
         return session(body.session_id).add_product(body.product_id).to_json()
 
+    # The PIN never goes through /api/utterance, so it is never logged, parsed or spoken.
     @app.post("/api/pin")
     async def pin_entry(body: PinEntry):
         return (await session(body.session_id).submit_pin(body.pin)).to_json()

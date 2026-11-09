@@ -1,10 +1,11 @@
-/* The demo shop: a category page with filters, opens EchoCart beside the products, and keeps the
-   basket and the order confirmation in step with the voice conversation. EchoCart posts each
-   reply's cart and receipt to this page; Add to basket asks EchoCart to add to the same cart. */
+/* The demo shop: a category page built from the shop's own product feed. "Shop by voice" opens
+   EchoCart (added with embed.js) beside the products; EchoCart sends each cart and receipt back, so
+   the basket and the order confirmation follow the conversation. Add to basket asks EchoCart to
+   add the product, by its variant id in the feed, to the same cart. */
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
-  const toggle = $("voice-toggle"), toggleLabel = $("voice-toggle-label"), panel = $("voice-panel"), frame = $("voice-frame");
+  const toggle = $("voice-toggle"), toggleLabel = $("voice-toggle-label"), panel = $("voice-panel"), slot = $("voice-slot");
   const basketBox = $("basket-box"), basket = $("basket"), basketSummary = $("basket-summary"), basketCount = $("basket-count");
   const order = $("order"), orderText = $("order-text"), orderLines = $("order-lines");
   const productList = $("products"), pageTitle = $("page-title"), crumb = $("crumb-current"), productsCount = $("products-count");
@@ -21,14 +22,14 @@
   // ---- packshots: a drawn pack for each kind of product ------------------
   const COLOURS = ["#1e5a43", "#2c5f9e", "#8a2a5b", "#1f6f78", "#5b3f8a", "#b9771b"];
   function colourFor(p) {
-    if (/honey|lemon/.test(p.id)) return "#c99a12";
-    if (/blackcurrant/.test(p.id)) return "#6b2350";
+    if (/honey|lemon/.test(p.key)) return "#c99a12";
+    if (/blackcurrant/.test(p.key)) return "#6b2350";
     let h = 0;
-    for (const c of p.id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+    for (const c of p.key) h = (h * 31 + c.charCodeAt(0)) >>> 0;
     return COLOURS[h % COLOURS.length];
   }
   function shapeFor(p) {
-    const t = `${p.id} ${p.name}`.toLowerCase();
+    const t = `${p.key} ${p.name}`.toLowerCase();
     if (/spray/.test(t)) return "spray";
     if (/thermometer/.test(t)) return "thermometer";
     if (/sanitiser|gel/.test(t)) return "pump";
@@ -72,11 +73,25 @@
     return `<svg class="packshot" viewBox="22 14 112 118" aria-hidden="true" focusable="false">${shapes[s]}</svg>`;
   }
 
+  // ---- the shop's product feed: one card per variant (pack size) -----------
+  const slug = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  function fromFeed(feed) {
+    return (feed.products || []).flatMap((item) => {
+      const variants = item.variants || [];
+      return variants.map((v) => {
+        const pack = /^default title$/i.test(v.title || "") ? "" : String(v.title || "");
+        const handle = slug(item.handle || item.title);
+        return {
+          id: String(v.id), key: variants.length === 1 ? handle : `${handle}-${slug(pack)}`,
+          name: item.title, brand: item.vendor || "", pack_size: pack, price_eur: v.price,
+          category: item.product_type || "Other", in_stock: v.available !== false,
+        };
+      });
+    });
+  }
+
   // ---- category page: categories, filters, sort ----------------------------
-  const CATEGORY_NAMES = { "pain-relief": "Pain relief", "cold-and-flu": "Cold and flu", "first-aid": "First aid",
-    "health-devices": "Health devices", vitamins: "Vitamins", "skin-care": "Skin care", hygiene: "Hygiene" };
-  const categoryName = (c) => c === "all" ? "All products"
-    : CATEGORY_NAMES[c] || c.replace(/-/g, " ").replace(/^./, (m) => m.toUpperCase());
+  const categoryName = (c) => c === "all" ? "All products" : c;
   const fullName = (p) => p.pack_size ? `${p.name}, ${p.pack_size}` : p.name;
 
   function selectedBrands() {
@@ -150,10 +165,8 @@
     }));
   }
 
-  fetch("/api/catalog").then((r) => r.json()).then(({ shop_name, products: list }) => {
-    $("shop-name").textContent = $("footer-name").textContent = shop_name;
-    document.title = `${shop_name} (demo shop)`;
-    products = list;
+  fetch("../linden-street-pharmacy.json").then((r) => r.json()).then((feed) => {
+    products = fromFeed(feed);
     renderCategories();
     renderProducts();
   }).catch(() => { productList.replaceChildren(el("li", "empty-results", "The products didn't load. Reload the page.")); });
@@ -206,44 +219,36 @@
     order.hidden = false;
   }
 
-  // ---- talking to EchoCart in the panel -------------------------------------
-  let ready = false;
-  const waitingAdds = [];
-  function sendAdds() {
-    if (!ready) return;
-    while (waitingAdds.length) {
-      const p = waitingAdds.shift();
-      frame.contentWindow.postMessage({ type: "echocart:add", product_id: p.id, name: fullName(p) }, location.origin);
+  // ---- EchoCart in the panel (embed.js) --------------------------------------
+  let voice = null, gotOrder = false;
+  function openVoice() {
+    if (voice) return voice.focus();
+    if (!window.EchoCart) {   // embed.js didn't load: EchoCart isn't running at that address
+      slot.replaceChildren(el("p", "muted", "Voice shopping isn't available right now. Try again later."));
+      return;
     }
+    voice = window.EchoCart.mount(slot, {   // EchoCart starts when first opened
+      onOrder(receipt) { showOrder(receipt); gotOrder = true; },
+      onCart(cart) {
+        if (cart && !gotOrder) order.hidden = true;   // a new basket replaces the last confirmation
+        gotOrder = false;
+        renderBasket(cart);
+      },
+    });
   }
   // Add to basket fills the same EchoCart cart: EchoCart reads it back, and paying still needs a yes.
   function addToBasket(p) {
-    waitingAdds.push(p);
     if (panel.hidden) setPanel(true);
-    sendAdds();
+    if (voice) voice.add(p.id, fullName(p));
   }
-
-  window.addEventListener("message", (event) => {
-    if (event.origin !== location.origin || event.source !== frame.contentWindow) return;
-    const m = event.data;
-    if (!m || m.type !== "echocart:update") return;
-    if (m.receipt) showOrder(m.receipt);
-    else if (m.cart) order.hidden = true;   // a new basket replaces the last confirmation
-    renderBasket(m.cart);
-    if (!ready) { ready = true; sendAdds(); }
-  });
 
   function setPanel(open) {
     panel.hidden = !open;
     document.body.classList.toggle("voice-open", open);
     toggle.setAttribute("aria-expanded", String(open));
     toggleLabel.textContent = open ? "Close voice shopping" : "Shop by voice";
-    if (!open) return;
-    if (!frame.getAttribute("src")) frame.src = "/?embed=1";   // EchoCart starts when first opened
-    else frame.focus();
+    if (open) openVoice();
   }
   toggle.addEventListener("click", () => setPanel(panel.hidden));
   $("welcome-voice").addEventListener("click", () => setPanel(true));
-  // When EchoCart has loaded, the focus goes into it, onto its Talk button.
-  frame.addEventListener("load", () => frame.focus());
 })();

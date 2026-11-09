@@ -108,7 +108,7 @@ class Deps:
     today: Callable[[], date] = date.today
     matcher: OfflineCartParser | None = None
     now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
-    shop_name: str = "Demo shop"   # shown on the demo shop page (/shop/)
+    shop_origins: tuple[str, ...] = ()   # shop websites allowed to show EchoCart in a frame
     shoppers_dir: Path | None = None  # set: each browser is its own shopper (hosted demo)
 
     def __post_init__(self):
@@ -432,21 +432,22 @@ class Conversation:
         self.cart = result.cart
         return self._propose(prefix)
 
-    def add_product(self, product_id: str) -> Reply:
-        """The shop page's Add to basket button: one more of a product in the same cart. The backend
-        prices it and reads the cart back, so paying still needs the spoken yes."""
+    def add_product(self, ref: str) -> Reply:
+        """A shop's Add to basket button: one more of a product in the same cart. `ref` is EchoCart's
+        product id or the shop's variant id from its feed. The backend prices it and reads the cart
+        back, so paying still needs the spoken yes."""
         self.pending_pin = None
-        product = self.deps.catalog.get(product_id)
+        product = self.deps.catalog.find(ref)
         if product is None:
             return self._say("That product isn't in the shop any more.", priority="assertive", earcon="error")
         if product.stock == 0:
             return self._say(f"Sorry, {product.spoken_name} is out of stock.", priority="assertive", earcon="error")
-        items = (self.cart.as_items() if self.cart else []) + [{"product_id": product_id, "quantity": 1}]
+        items = (self.cart.as_items() if self.cart else []) + [{"product_id": product.id, "quantity": 1}]
         try:
             cart = price_cart(items, self.deps.catalog, self.deps.today())
         except CartError as e:
             return self._say(f"I couldn't add that. {e}", priority="assertive", earcon="error")
-        had_it = bool(self.cart) and any(l.product.id == product_id for l in self.cart.lines)
+        had_it = bool(self.cart) and any(l.product.id == product.id for l in self.cart.lines)
         self.cart = cart
         return self._propose("Updated. " if had_it else f"Added {product.spoken_name}. ")
 

@@ -60,7 +60,7 @@ You link your PayPal account **once**, in a popup that EchoCart talks you throug
 **Merchant catalogues:**
 - **`CATALOG_URL`** loads a merchant's product feed in the Shopify-style `products.json` shape, from a URL or a file. Each variant becomes a product; prices are read as euros, unavailable variants can't be bought, and a feed in another currency is refused.
 - **The safety rules don't change.** Prices still come only from the feed, and payments go to the merchant's own PayPal account.
-- **A demo shop page** (`/shop/`), laid out like a real pharmacy's category page, lists the same products and embeds EchoCart in a side panel. Its Add to basket buttons fill the same voice cart, which EchoCart reads back before any yes. EchoCart posts each cart and receipt to the page, so the shop's basket highlights what changed and shows the order once it's paid.
+- **On the shop's own website.** A shop adds EchoCart with a script tag (`embed.js`); EchoCart keeps running on its own address. A `frame-ancestors` header lets only the shop's sites (`SHOP_ORIGINS`) show it, and messages go only to that shop's page. The demo pharmacy site runs on a separate address from EchoCart, builds its pages from its own feed, and its Add to basket buttons fill the same voice cart by the feed's variant ids. EchoCart reads the cart back before any yes, and sends each cart and receipt to the page, so the shop's basket highlights what changed and shows the order once it's paid.
 
 **AI (Claude):**
 - **What Claude does.** It turns the shopper's words into structured JSON through a JSON-schema response: an action (`propose_cart`, `edit_cart`, `clarify`, `refund_request`, ...), product ids and quantities, the stated budget, and a clarifying question if the request is ambiguous.
@@ -88,7 +88,7 @@ The safety rules are enforced in code, not left to the AI's instructions:
 - **The optional PIN is a second step, never a shortcut.** It only completes a valid yes. Saying anything else cancels it, and three wrong tries lock payments and account changes for 10 minutes. It's stored as a salted scrypt hash and goes to its own endpoint, so it never reaches the conversation, the speech engine or the logs.
 - **When PayPal doesn't answer**, EchoCart doesn't pretend nothing happened. It says it can't tell yet, and paying the same cart again reuses the same PayPal request id, so PayPal returns the first order instead of charging twice. We found this case in a real sandbox run, where one create took over 30 seconds.
 
-These rules are covered by 127 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
+These rules are covered by 129 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
 
 ## Accessibility choices
 

@@ -1,4 +1,5 @@
-"""The demo shop website: its product list comes from the same catalogue EchoCart sells from."""
+"""Shops add EchoCart to their own website with embed.js. The demo shop (examples/shop/) runs on
+its own address; EchoCart opens only on the shop sites in SHOP_ORIGINS."""
 import os
 import tempfile
 import unittest
@@ -8,47 +9,65 @@ from unittest import mock
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
-from backend.config import get_settings
+from backend.config import get_settings, parse_origins
 from backend.dialog import Deps
 from backend.feed import load_catalog
 from backend.llm import OfflineCartParser
 from backend.store import Store
 from tests.test_dialog import TODAY
 
+ROOT = Path(__file__).resolve().parents[1]
 SAMPLE = "examples/linden-street-pharmacy.json"
 
 
-class ShopSite(unittest.TestCase):
+class EmbedOnShopSites(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)
-        catalog = load_catalog(SAMPLE)
-        self.deps = Deps(catalog, OfflineCartParser(catalog), None, Store(Path(self.tmp.name) / "s.json"),
-                         "http://localhost:8000", today=lambda: TODAY, shop_name="Linden Street Pharmacy")
+        self.catalog = load_catalog(SAMPLE)
 
-    def test_catalogue_for_the_shop_page(self):
-        with TestClient(create_app(self.deps)) as client:
-            body = client.get("/api/catalog").json()
-        self.assertEqual(body["shop_name"], "Linden Street Pharmacy")
-        self.assertEqual(len(body["products"]), 12)
-        ibu = next(p for p in body["products"] if p["id"] == "ibuprofen-200-16-tablets")
-        self.assertEqual(ibu, {"id": "ibuprofen-200-16-tablets", "name": "Ibuprofen 200 mg tablets",
-                               "brand": "Linden Health", "pack_size": "16 tablets", "price_eur": "2.49",
-                               "category": ibu["category"], "in_stock": True})
-        lozenges = next(p for p in body["products"] if p["id"] == "throat-lozenges-blackcurrant")
-        self.assertFalse(lozenges["in_stock"])
+    def client(self, origins=()):
+        deps = Deps(self.catalog, OfflineCartParser(self.catalog), None, Store(Path(self.tmp.name) / "s.json"),
+                    "http://localhost:8000", today=lambda: TODAY, shop_origins=origins)
+        return TestClient(create_app(deps))
 
-    def test_shop_page_is_served(self):
-        with TestClient(create_app(self.deps)) as client:
-            page = client.get("/shop/")
-        self.assertEqual(page.status_code, 200)
-        self.assertIn('id="voice-panel"', page.text)
+    def test_embed_script_is_served(self):
+        with self.client() as client:
+            r = client.get("/embed.js")
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("javascript", r.headers["content-type"])
+        self.assertIn("window.EchoCart", r.text)
 
-    def test_shop_name_setting(self):
-        with mock.patch.dict(os.environ, {"SHOP_NAME": " Linden Street Pharmacy "}):
-            self.assertEqual(get_settings().shop_name, "Linden Street Pharmacy")
-        with mock.patch.dict(os.environ, {"SHOP_NAME": ""}):
-            self.assertEqual(get_settings().shop_name, "Demo shop")
+    def test_only_listed_shops_may_show_echocart(self):
+        with self.client() as client:
+            self.assertEqual(client.get("/").headers["content-security-policy"], "frame-ancestors 'self'")
+        with self.client(("http://localhost:8012", "https://shop.example")) as client:
+            for path in ("/", "/api/status"):
+                self.assertEqual(client.get(path).headers["content-security-policy"],
+                                 "frame-ancestors 'self' http://localhost:8012 https://shop.example")
+
+    def test_shop_origins_setting(self):
+        self.assertEqual(parse_origins(" http://localhost:8012/ , HTTPS://Shop.example,,https://shop.example"),
+                         ("http://localhost:8012", "https://shop.example"))
+        self.assertEqual(parse_origins(""), ())
+        for bad in ("https://shop.example/basket", "shop.example", "javascript:alert(1)", "https://a b.example", "*"):
+            with self.assertRaises(ValueError, msg=bad):
+                parse_origins(bad)
+        with mock.patch.dict(os.environ, {"SHOP_ORIGINS": "http://localhost:8012"}):
+            self.assertEqual(get_settings().shop_origins, ("http://localhost:8012",))
+
+    def test_the_demo_shop_is_its_own_site(self):
+        with self.client() as client:
+            self.assertEqual(client.get("/shop/").status_code, 404)   # EchoCart doesn't serve it
+        page = (ROOT / "examples" / "shop" / "index.html").read_text(encoding="utf-8")
+        self.assertIn('<script src="http://localhost:8011/embed.js"></script>', page)
+        self.assertNotIn("<iframe", page)   # embed.js adds EchoCart
+        self.assertIn("../linden-street-pharmacy.json", (ROOT / "examples" / "shop" / "shop.js").read_text(encoding="utf-8"))
+
+    def test_feed_variant_ids(self):
+        self.assertEqual(self.catalog.find("4400101").id, "ibuprofen-200-16-tablets")
+        self.assertEqual(self.catalog.find("ibuprofen-200-16-tablets").variant_id, "4400101")
+        self.assertIsNone(self.catalog.find("no-such-variant"))
 
 
 class AddToBasket(unittest.TestCase):
@@ -76,8 +95,10 @@ class AddToBasket(unittest.TestCase):
             r = self.add(client, sid, "ibuprofen-200-16-tablets")
             self.assertTrue(r["speech"].startswith("Updated. Your cart:"))
             self.assertIn("quantity two. Total 4 euros 98 cents.", r["speech"])
+            r = self.add(client, sid, "4400102")   # the shop's variant id: ibuprofen, 32 tablets
+            self.assertTrue(r["speech"].startswith("Added Linden Health Ibuprofen 200 mg tablets, 32 tablets."))
             r = self.add(client, sid, "vitamin-d3")
-            self.assertEqual([l["product_id"] for l in r["cart"]["lines"]], ["ibuprofen-200-16-tablets", "vitamin-d3"])
+            self.assertEqual([l["product_id"] for l in r["cart"]["lines"]], ["ibuprofen-200-16-tablets", "ibuprofen-200-32-tablets", "vitamin-d3"])
 
     def test_out_of_stock_and_unknown(self):
         with TestClient(create_app(self.deps)) as client:

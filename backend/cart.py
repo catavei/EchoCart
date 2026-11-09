@@ -30,6 +30,7 @@ class Product(BaseModel):
     delivery_days: int = Field(ge=0)
     category: str
     keywords: list[str] = []
+    variant_id: str = ""   # the shop's own id for this product in its feed
 
     @property
     def spoken_name(self) -> str:
@@ -40,6 +41,7 @@ class Product(BaseModel):
 class Catalog:
     def __init__(self, products: list[Product]):
         self._by_id = {p.id: p for p in products}
+        self._by_variant = {p.variant_id: p for p in products if p.variant_id}
 
     @classmethod
     def load(cls, path: Path = CATALOG_PATH) -> "Catalog":
@@ -47,6 +49,10 @@ class Catalog:
 
     def get(self, product_id: str) -> Product | None:
         return self._by_id.get(product_id)
+
+    def find(self, ref: str) -> Product | None:
+        """A product by EchoCart's id or by the shop's variant id from its feed."""
+        return self._by_id.get(ref) or self._by_variant.get(ref)
 
     def __contains__(self, product_id: str) -> bool:
         return product_id in self._by_id
