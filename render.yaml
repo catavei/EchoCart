@@ -1,5 +1,5 @@
 # Render Blueprint for the hosted EchoCart demo (PayPal sandbox only).
-# Render dashboard > New > Blueprint > pick this repository. Render asks for the three secrets below.
+# Render dashboard > New > Blueprint > pick this repository. Render asks for the two PayPal secrets below.
 services:
   - type: web
     name: echocart
