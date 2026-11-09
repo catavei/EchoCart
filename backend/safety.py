@@ -16,7 +16,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, ValidationError
 
-from .cart import MAX_QUANTITY, Catalog, CartError, PricedCart, price_cart
+from .cart import MAX_QUANTITY, Catalog, CartError, PricedCart, price_cart, say_eur
 
 # ---- 1-3. confirmation gate -----------------------------------------------
 ACCEPTED_CONFIRMATIONS = frozenset({"yes", "yes pay", "confirm"})
@@ -91,12 +91,12 @@ class LLMCartResponse(BaseModel):
     items: list[LLMItem]
     question: str | None
     spoken_summary: str = Field(max_length=400)
-    budget_lei: float | None = None
+    budget_eur: float | None = None
 
 
 _BUDGET_RE = re.compile(
     r"\b(?:under|below|less than|max(?:imum)?|at most|up to|no more than|within|sub|maxim|până la)\s+"
-    r"(\d+(?:[.,]\d{1,2})?)\s*(?:de\s+)?(?:lei|ron|leu)?",
+    r"(?:€\s*)?(\d+(?:[.,]\d{1,2})?)\s*(?:de\s+)?(?:euros?|eur|€)?",
     re.IGNORECASE,
 )
 
@@ -132,7 +132,7 @@ def effective_budget(transcript: str, llm_budget: float | None) -> Decimal | Non
 
 
 def validate_llm_output(raw: object, transcript: str, catalog: Catalog,
-                        eur_per_ron: Decimal, budget: Decimal | None = None,
+                        budget: Decimal | None = None,
                         today=None) -> Validated | Rejected:
     try:
         resp = LLMCartResponse.model_validate(raw)
@@ -152,15 +152,15 @@ def validate_llm_output(raw: object, transcript: str, catalog: Catalog,
         return Rejected("I couldn't find that in the shop. Could you describe it differently?",
                         f"unknown product ids {unknown}")
     try:
-        cart = price_cart([i.model_dump() for i in resp.items], catalog, eur_per_ron, today)
+        cart = price_cart([i.model_dump() for i in resp.items], catalog, today)
     except CartError as e:
         return Rejected(f"{e} Would you like something else instead?", f"cart: {e}")
 
-    limit = budget if budget is not None else effective_budget(transcript, resp.budget_lei)
-    if limit is not None and cart.total_ron > limit:
+    limit = budget if budget is not None else effective_budget(transcript, resp.budget_eur)
+    if limit is not None and cart.total_eur > limit:
         return Rejected(
-            f"That would come to more than your {limit.normalize():f} lei budget. "
+            f"That would come to more than your {say_eur(limit)} budget. "
             "Should I look for cheaper options, or fewer items?",
-            f"over budget: {cart.total_ron} > {limit}",
+            f"over budget: {cart.total_eur} > {limit}",
         )
     return Validated(resp, cart)

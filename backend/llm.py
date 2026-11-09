@@ -32,7 +32,7 @@ ANTHROPIC_VERSION = "2026-10-21"
 CART_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
-    "required": ["action", "items", "question", "spoken_summary", "budget_lei"],
+    "required": ["action", "items", "question", "spoken_summary", "budget_eur"],
     "properties": {
         "action": {"type": "string", "enum": ["propose_cart", "clarify", "edit_cart",
                                               "refund_request", "help", "cancel"]},
@@ -47,7 +47,7 @@ CART_SCHEMA = {
         },
         "question": {"anyOf": [{"type": "string"}, {"type": "null"}]},
         "spoken_summary": {"type": "string"},
-        "budget_lei": {"anyOf": [{"type": "number"}, {"type": "null"}]},
+        "budget_eur": {"anyOf": [{"type": "number"}, {"type": "null"}]},
     },
 }
 
@@ -116,7 +116,7 @@ _WORD_NUMBERS = {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "fi
 _SYNONYMS = [(r"\bdouble a\b", "aa"), (r"\btriple a\b", "aaa"), (r"\bdouble aa\b", "aa"),
              (r"\bdouble-a\b", "aa"), (r"\b(\d+) volt\b", r"\1v"), (r"\bnine volt\b", "9v")]
 _STOPWORDS = {"of", "the", "some", "and", "pack", "packs", "please", "i", "want", "need", "buy",
-              "get", "me", "under", "lei", "ron", "de", "si", "și", "with", "for", "box", "boxes",
+              "get", "me", "under", "euro", "euros", "eur", "de", "si", "și", "with", "for", "box", "boxes",
               "bottle", "bottles", "could", "you", "order", "would", "like", "also", "sub", "pentru",
               "refund", "last", "my", "just", "only", "how", "much", "is", "price", "what", "do",
               "have", "tell", "about", "kinds", "types", "cost", "costs", "does", "your", "any",
@@ -124,7 +124,7 @@ _STOPWORDS = {"of", "the", "some", "and", "pack", "packs", "please", "i", "want"
 # Words shared by a whole category; they don't make two products "the same kind".
 _GENERIC_TERMS = {"batteries", "baterii", "alkaline", "alcaline", "battery", "baterie", "cheap",
                   "tablets", "bags", "mineral", "minerala", "apa", "water"}
-_QTY_RE = re.compile(r"\b(\d{1,2})\b(?!\s*(?:lei|ron|v\b|ml|g\b|kg|l\b|litre|liter))")
+_QTY_RE = re.compile(r"\b(\d{1,2})\b(?!\s*(?:euros?|eur|v\b|ml|g\b|kg|l\b|litre|liter))")
 _DIACRITICS = str.maketrans("ăâîșşțţ", "aaisstt")
 
 
@@ -199,28 +199,28 @@ class OfflineCartParser:
         if len(kinds) > 1:
             return None, f"Did you mean {' or '.join(kinds[:3])}?"
         if budget is not None:
-            fitting = [p for p in in_stock if p.price_ron * qty <= budget]
+            fitting = [p for p in in_stock if p.price_eur * qty <= budget]
             if fitting:
                 return fitting[0], None
-            return min(in_stock, key=lambda p: p.price_ron), None  # validator reports the overrun
+            return min(in_stock, key=lambda p: p.price_eur), None  # validator reports the overrun
         return in_stock[0], None
 
     def _cheaper(self, product_id: str) -> str:
         p = self.catalog.get(product_id)
         same_kind = [c for c in self.catalog if c.category == p.category and c.stock > 0
                      and self._terms[c.id] & self._terms[p.id] - _GENERIC_TERMS
-                     and c.price_ron < p.price_ron]
-        return min(same_kind, key=lambda c: c.price_ron).id if same_kind else product_id
+                     and c.price_eur < p.price_eur]
+        return min(same_kind, key=lambda c: c.price_eur).id if same_kind else product_id
 
     def _result(self, action, items=(), question=None, summary="", budget=None):
         return {"action": action, "items": list(items), "question": question,
                 "spoken_summary": summary or (question or ""),
-                "budget_lei": float(budget) if budget is not None else None}
+                "budget_eur": float(budget) if budget is not None else None}
 
     # ---- main
     def parse_sync(self, transcript: str, current_items: list[dict]) -> dict:
         budget = extract_budget(transcript)
-        # Drop the budget phrase so "under 30 lei" isn't read as a quantity of 30.
+        # Drop the budget phrase so "under 30 euros" isn't read as a quantity of 30.
         # Commas separate items; turn them into "and" before punctuation is stripped.
         text = self._clean(_BUDGET_RE.sub(" ", transcript).replace(",", " and "))
         current = [dict(i) for i in current_items]

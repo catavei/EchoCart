@@ -28,15 +28,15 @@ Voice assistants can fill a cart, but most of them still hand you to a visual pa
 
 ## What it does
 
-- **Press one button (or Space) and speak:** *"two packs of AA batteries under 50 lei."*
-- **EchoCart reads the cart back:** items, quantities, total in lei and in euros, delivery date. Then it asks: *"Say yes to pay, or tell me what to change."*
+- **Press one button (or Space) and speak:** *"two packs of AA batteries under 10 euros."*
+- **EchoCart reads the cart back:** items, quantities, the total in euros, delivery date. Then it asks: *"Say yes to pay, or tell me what to change."*
 - **Change anything by voice:** "remove the batteries", "make it three", "cheaper option", "add some sponges". Each change is read back again and needs a new yes.
 - **Say "yes" and it pays with PayPal**, then speaks the receipt: order number, amount charged, delivery date. A success chime confirms it.
 - **"Refund my last order"**, or **"refund just the batteries"**, reads back what will be refunded and the amount, asks for a yes, refunds through PayPal (fully or partly) and confirms aloud.
 - **"Same as last time"** rebuilds the last order with today's prices and stock, then reads it back. Ordering your usual essentials takes one sentence and one yes.
 - **"Where's my order?"** and **"what did I order?"** read back delivery dates and recent orders.
 - **"How much is coffee?"** and **"what tea do you have?"** answer without touching the cart.
-- **"Set my spending limit to 100 lei"** stops EchoCart paying for any order above it. Lowering the limit takes effect at once; raising or removing it needs a yes.
+- **"Set my spending limit to 20 euros"** stops EchoCart paying for any order above it. Lowering the limit takes effect at once; raising or removing it needs a yes.
 - **"Unlink my PayPal"** deletes the saved PayPal account through PayPal's Vault API, after a yes.
 - **An optional PIN** protects against someone else in the room saying "yes". After your yes, EchoCart asks you to *type* the PIN, because a spoken PIN can be overheard. You choose whether it's every payment or only those over an amount. It's also needed to raise the spending limit or unlink PayPal.
 - **"Repeat", "help" and "cancel"** work at every step, with no timeouts.
@@ -51,7 +51,7 @@ You link your PayPal account **once**, in a popup that EchoCart talks you throug
 - **Payments v2.** `POST /v2/payments/captures/{id}/refund` for voice refunds, both full and partial (with an amount). For partial refunds, EchoCart works out each line's amount and refunds the exact remainder last, so rounding never adds up to more than was charged.
 - **Vault v3 delete.** `DELETE /v3/vault/payment-tokens/{id}` when the shopper says "unlink my PayPal".
 - **Fallback.** If a sandbox app doesn't have Vault enabled, EchoCart switches to PayPal's standard approval page in a popup and narrates each step. Judges can run it either way.
-- **Currency.** PayPal REST doesn't support RON (Romanian lei), so carts are priced in lei and charged in EUR at a fixed demo rate. Both amounts are spoken.
+- **Currency.** The shop prices in euros, the currency PayPal charges, so the spoken total is exactly what PayPal takes. There's no conversion step to explain or get wrong.
 - **Audit log.** Every create, capture and refund is logged with a timestamp and order id.
 - **Sandbox only.** The app refuses to start unless the API base URL is PayPal's sandbox.
 
@@ -81,7 +81,7 @@ The safety rules are enforced in code, not left to the AI's instructions:
 - **The optional PIN is a second step, never a shortcut.** It only completes a valid yes. Saying anything else cancels it, and three wrong tries lock payments and account changes for 10 minutes. It's stored as a salted scrypt hash and goes to its own endpoint, so it never reaches the conversation, the speech engine or the logs.
 - **When PayPal doesn't answer**, EchoCart doesn't pretend nothing happened. It says it can't tell yet, and paying the same cart again reuses the same PayPal request id, so PayPal returns the first order instead of charging twice. We found this case in a real sandbox run, where one create took over 30 seconds.
 
-These rules are covered by 100 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
+These rules are covered by 99 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
 
 ## Accessibility choices
 
@@ -104,7 +104,7 @@ These rules are covered by 100 automated tests, including 30 recorded-style utte
 - **The approval page problem.** Standard PayPal checkout sends the buyer to a login and approval page, which breaks a voice-only flow. We checked PayPal's documentation for saving a PayPal account (vaulting) for returning buyers, and confirmed the one-time setup flow and the server-side order with `vault_id`. Then we built a fallback for when Vault isn't available.
 - **Popups and accessibility.** Browsers block a popup opened by a voice command, because it isn't a user gesture. The fix: EchoCart says "press Enter" and moves focus to the button, so the key press opens the window.
 - **Trust versus convenience.** It's tempting to accept "yeah" or "sure". We chose a strict rule, and made the error message re-read the total so a strict yes is never confusing.
-- **RON isn't a PayPal REST currency**, so we price in lei and charge in EUR, and say both amounts.
+- **One currency, said once.** We first priced in Romanian lei and charged in euros, because PayPal REST doesn't support lei. Hearing every total twice made each read-back longer and harder to follow, so the shop now prices in euros only.
 - **Proving the vault path on the real sandbox before building on it.** A standalone script links a sandbox buyer, pays 1.00 EUR with the saved account and refunds it. The vaulted order came back `COMPLETED` directly from create, with no approval page and no separate capture call. **[EDIT: add anything else that came up.]**
 
 ## Accomplishments that we're proud of
@@ -117,7 +117,7 @@ These rules are covered by 100 automated tests, including 30 recorded-style utte
 ## What we learned
 
 **[EDIT]** For example:
-- Designing for speech means designing the *sentences*: the order of information, money said the way people say it ("45 lei 80 bani"), and when to stay quiet.
+- Designing for speech means designing the *sentences*: the order of information, money said the way people say it ("9 euros 18 cents"), and when to stay quiet.
 - `aria-live` regions need care. A repeated message has to be cleared and rewritten, or screen readers stay silent.
 
 ## What's next

@@ -25,8 +25,8 @@ The video has to show three things: **one full purchase by voice with the screen
 *Black screen. Captions only.*
 
 > **[Space pressed. Rising earcon.]**
-> **You:** "Two packs of AA batteries under 50 lei."
-> **EchoCart:** "Your cart: VoltMax AA alkaline batteries, 4 pack, quantity two. Total 45 lei 80 bani, charged as 9 euros 21 cents..."
+> **You:** "Two packs of AA batteries under 10 euros."
+> **EchoCart:** "Your cart: VoltMax AA alkaline batteries, 4 pack, quantity two. Total 9 euros 18 cents..."
 
 Cut out mid-sentence.
 
@@ -44,20 +44,20 @@ Cut out mid-sentence.
 
 > **[Space. Rising earcon.]**
 > **You:** "I need double A batteries and some dish soap."
-> **EchoCart:** "Your cart: VoltMax AA alkaline batteries, 4 pack, quantity one; Casa Clean Dishwashing liquid, lemon, 500 ml, quantity one. Total 31 lei 80 bani, charged as 6 euros 39 cents. Delivery tomorrow, Saturday… Say yes to pay, or tell me what to change."
+> **EchoCart:** "Your cart: VoltMax AA alkaline batteries, 4 pack, quantity one; Casa Clean Dishwashing liquid, lemon, 500 ml, quantity one. Total 6 euros 38 cents. Delivery tomorrow, Saturday… Say yes to pay, or tell me what to change."
 
 **The edit:**
 
 > **[Space.]** **You:** "Make the batteries two packs."
-> **EchoCart:** "Updated. Your cart: … quantity two … Total 54 lei 70 bani, charged as 10 euros 99 cents. … Say yes to pay, or tell me what to change."
+> **EchoCart:** "Updated. Your cart: … quantity two … Total 10 euros 97 cents. … Say yes to pay, or tell me what to change."
 
 **Show the safety rule (keep this short):**
 
 > **You:** "Yeah, go ahead."
-> **EchoCart:** "I need a clear yes before paying. Your cart: … Total 54 lei 70 bani…"
+> **EchoCart:** "I need a clear yes before paying. Your cart: … Total 10 euros 97 cents…"
 > **You:** "Yes."
 > **[Three-note success chime.]**
-> **EchoCart:** "Payment done. Order number ending 7, 1, 5, T. Charged 10 euros 99 cents, that's 54 lei 70 bani. Delivery tomorrow, Saturday 7 November."
+> **EchoCart:** "Payment done. Order number ending 7, 1, 5, T. Charged 10 euros 97 cents. Delivery tomorrow, Saturday 7 November."
 
 *Narration (5 s), screen still black:*
 
@@ -79,9 +79,9 @@ The actual totals depend on what Claude picks. Re-record until the edit reads na
 *Screen Curtain back on, or just the page.*
 
 > **[Space.]** **You:** "Refund just the batteries."
-> **EchoCart:** "Refund VoltMax AA alkaline batteries, 4 pack, quantity 2, from your last order, number ending 7, 1, 5, T. 9 euros 21 cents back to your PayPal, that's 45 lei 80 bani. The rest of the order stays. Say yes to refund, or no to keep it."
+> **EchoCart:** "Refund VoltMax AA alkaline batteries, 4 pack, quantity 2, from your last order, number ending 7, 1, 5, T. 9 euros 18 cents back to your PayPal. The rest of the order stays. Say yes to refund, or no to keep it."
 > **You:** "Yes."
-> **[Success chime.]** **EchoCart:** "Refund done. 9 euros 21 cents will go back to your PayPal account."
+> **[Success chime.]** **EchoCart:** "Refund done. 9 euros 18 cents will go back to your PayPal account."
 
 Cut to the sandbox dashboard showing the partial refund (2 s). If there's time, add:
 

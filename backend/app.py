@@ -42,7 +42,7 @@ class PinEntry(SessionRef):
 class PinSettings(SessionRef):
     new_pin: str | None = Field(default=None, max_length=8)
     current_pin: str | None = Field(default=None, max_length=8)
-    over_ron: Decimal = Field(default=Decimal("0"), ge=0, le=100000)
+    over_eur: Decimal = Field(default=Decimal("0"), ge=0, le=100000)
 
 
 class PinRemoval(SessionRef):
@@ -60,7 +60,7 @@ def build_deps() -> Deps:
         log.warning("PAYPAL_CLIENT_ID/SECRET not set: payments disabled")
     log.info("LLM mode: %s, model: %s", settings.llm_mode, settings.anthropic_model)
     return Deps(catalog=catalog, parser=make_parser(settings, catalog), paypal=paypal,
-                store=Store(settings.data_dir / "store.json"), eur_per_ron=settings.eur_per_ron,
+                store=Store(settings.data_dir / "store.json"),
                 base_url=settings.app_base_url)
 
 
@@ -121,7 +121,7 @@ def create_app(deps: Deps | None = None) -> FastAPI:
 
     @app.post("/api/pin/set")
     def pin_set(body: PinSettings):
-        return session(body.session_id).set_pin(body.new_pin, body.current_pin, body.over_ron).to_json()
+        return session(body.session_id).set_pin(body.new_pin, body.current_pin, body.over_eur).to_json()
 
     @app.post("/api/pin/remove")
     def pin_remove(body: PinRemoval):

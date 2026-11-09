@@ -75,12 +75,12 @@
     ul.className = "cart-lines";
     for (const line of cart.lines) {
       const li = document.createElement("li");
-      li.textContent = `${line.name}. Quantity ${line.quantity}. ${line.subtotal_ron} lei`;
+      li.textContent = `${line.name}. Quantity ${line.quantity}. ${line.subtotal_eur} euros`;
       ul.append(li);
     }
     const total = document.createElement("p");
     total.className = "cart-total";
-    total.textContent = `Total ${cart.total_ron} lei, charged as ${cart.total_eur} euros.`;
+    total.textContent = `Total ${cart.total_eur} euros.`;
     const delivery = document.createElement("p");
     delivery.textContent = "Delivery: " + new Date(cart.delivery_date + "T12:00:00")
       .toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
@@ -101,10 +101,10 @@
 
   function showPinSettings(reply) {
     if (!("pin_set" in reply)) return;
-    const over = reply.pin_over_ron ? Math.round(Number(reply.pin_over_ron)) : 0;
+    const over = reply.pin_over_eur ? Math.round(Number(reply.pin_over_eur)) : 0;
     pinStatus.textContent = !reply.pin_set ? "No PIN set. Payments need only your spoken yes."
       : over === 0 ? "PIN on. EchoCart asks for it after your yes on every payment."
-      : `PIN on. EchoCart asks for it after your yes on payments over ${over} lei.`;
+      : `PIN on. EchoCart asks for it after your yes on payments over ${over} euros.`;
     pinCurrentRow.hidden = !reply.pin_set;
     pinRemove.hidden = !reply.pin_set;
     pinNewLabel.textContent = reply.pin_set ? "New PIN, 4 to 8 digits (leave empty to keep your PIN)" : "New PIN, 4 to 8 digits";
@@ -114,7 +114,7 @@
   function handleReply(reply) {
     lastReply = reply;
     renderCart(reply.cart);
-    if ("spending_limit_ron" in reply) showLimit(reply.spending_limit_ron);
+    if ("spending_limit_eur" in reply) showLimit(reply.spending_limit_eur);
     showPinSettings(reply);
     addLog("EchoCart", reply.speech);
     announce(reply.speech, reply.priority);
@@ -173,7 +173,7 @@
     sessionId = reply.session_id;
     // Browsers block speech before the first key press, so the welcome is shown and announced only.
     renderCart(reply.cart);
-    showLimit(reply.spending_limit_ron);
+    showLimit(reply.spending_limit_eur);
     showPinSettings(reply);
     addLog("EchoCart", reply.speech);
     announce(reply.speech, "polite");
@@ -293,7 +293,7 @@
       handleReply({ speech: "Enter a limit of at least 1 leu.", priority: "assertive", cart: lastReply && lastReply.cart });
       return;
     }
-    send(`set my spending limit to ${value} lei`);
+    send(`set my spending limit to ${value} euros`);
   });
   $("limit-remove").addEventListener("click", () => send("remove my spending limit"));
 
@@ -334,7 +334,7 @@
       pinNew.focus();
       return;
     }
-    postReply("/api/pin/set", { new_pin: newPin || null, current_pin: current || null, over_ron: String(over) });
+    postReply("/api/pin/set", { new_pin: newPin || null, current_pin: current || null, over_eur: String(over) });
   });
 
   pinRemove.addEventListener("click", () => {

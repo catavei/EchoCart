@@ -7,12 +7,11 @@ from backend.safety import (ConfirmationGate, Rejected, Validated, extract_budge
                             is_confirmation, refund_fingerprint, validate_llm_output)
 
 CATALOG = Catalog.load()
-RATE = Decimal("0.201")
 TODAY = date(2026, 11, 6)
 
 
 def cart_of(*items):
-    return price_cart([{"product_id": p, "quantity": q} for p, q in items], CATALOG, RATE, TODAY)
+    return price_cart([{"product_id": p, "quantity": q} for p, q in items], CATALOG, TODAY)
 
 
 class ConfirmationPhrases(unittest.TestCase):
@@ -81,13 +80,13 @@ class RefundGate(unittest.TestCase):
 
 class LLMValidation(unittest.TestCase):
     def check(self, raw, transcript="two packs of AA batteries"):
-        return validate_llm_output(raw, transcript, CATALOG, RATE, today=TODAY)
+        return validate_llm_output(raw, transcript, CATALOG, today=TODAY)
 
     def test_valid_cart(self):
         r = self.check({"action": "propose_cart", "items": [{"product_id": "bat-aa-4-vm", "quantity": 2}],
                         "question": None, "spoken_summary": "Two packs of AA batteries."})
         self.assertIsInstance(r, Validated)
-        self.assertEqual(r.cart.total_ron, Decimal("45.80"))
+        self.assertEqual(r.cart.total_eur, Decimal("9.18"))
 
     def test_schema_failure(self):
         self.assertIsInstance(self.check({"action": "buy", "items": []}), Rejected)
@@ -105,12 +104,12 @@ class LLMValidation(unittest.TestCase):
         raw = {"action": "propose_cart", "items": [{"product_id": "bat-aa-4-vm", "quantity": 1,
                "price": "0.01"}], "question": None, "spoken_summary": "x", "total": "0.01"}
         r = self.check(raw)
-        self.assertEqual(r.cart.total_ron, Decimal("22.90"))
+        self.assertEqual(r.cart.total_eur, Decimal("4.59"))
 
     def test_over_budget_from_transcript_even_if_llm_omits_it(self):
         r = self.check({"action": "propose_cart", "items": [{"product_id": "bat-aa-8-vm", "quantity": 2}],
-                        "question": None, "spoken_summary": "x", "budget_lei": None},
-                       transcript="two packs of AA batteries under 50 lei")
+                        "question": None, "spoken_summary": "x", "budget_eur": None},
+                       transcript="two packs of AA batteries under 10 euros")
         self.assertIsInstance(r, Rejected)
         self.assertIn("budget", r.question)
 
@@ -126,10 +125,11 @@ class LLMValidation(unittest.TestCase):
                                           "spoken_summary": ""}), Rejected)
 
     def test_extract_budget(self):
-        self.assertEqual(extract_budget("AA batteries under 50 lei"), Decimal("50"))
-        self.assertEqual(extract_budget("baterii sub 30 de lei"), Decimal("30"))
-        self.assertEqual(extract_budget("baterii sub 30 lei"), Decimal("30"))
-        self.assertEqual(extract_budget("no more than 12,50 lei"), Decimal("12.50"))
+        self.assertEqual(extract_budget("AA batteries under 10 euros"), Decimal("10"))
+        self.assertEqual(extract_budget("AA batteries under €10"), Decimal("10"))
+        self.assertEqual(extract_budget("baterii sub 6 euro"), Decimal("6"))
+        self.assertEqual(extract_budget("baterii sub 6 de euro"), Decimal("6"))
+        self.assertEqual(extract_budget("no more than 12,50 euros"), Decimal("12.50"))
         self.assertIsNone(extract_budget("two packs of batteries"))
 
 

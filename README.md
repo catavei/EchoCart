@@ -2,7 +2,7 @@
 
 **Voice-first shopping and PayPal checkout for blind and low-vision shoppers.**
 
-You press one big button (or Space) and say *"two packs of AA batteries under 50 lei"*. EchoCart reads the cart back with the exact total and delivery date. You say *"yes"*, and it pays with PayPal and reads you the receipt. Changes, repeats and refunds all work by voice, and you never have to find a button on a checkout page.
+You press one big button (or Space) and say *"two packs of AA batteries under 10 euros"*. EchoCart reads the cart back with the exact total and delivery date. You say *"yes"*, and it pays with PayPal and reads you the receipt. Changes, repeats and refunds all work by voice, and you never have to find a button on a checkout page.
 
 Built for the [PayPal AI Hackathon](https://paypalaihackathon.devpost.com/). It runs on the **PayPal sandbox only**, so no real money moves.
 
@@ -38,7 +38,7 @@ EchoCart is designed around three things a blind shopper needs to trust a paymen
   - **Orders v2:** each order is created with `payment_source.paypal.vault_id`, so no approval page is needed. EchoCart captures the order explicitly if PayPal hasn't already.
   - **Payments v2:** refunds go to `POST /v2/payments/captures/{id}/refund`, either full or partial (with an amount). The last partial refund uses the exact remainder, so rounding never refunds more than was charged.
   - **Vault v3 delete:** "unlink my PayPal" calls `DELETE /v3/vault/payment-tokens/{id}`.
-- **Currency:** PayPal REST doesn't support Romanian lei (RON). Carts are priced in lei and charged in **EUR at a fixed demo rate** (`EUR_PER_RON`). Both amounts are spoken: *"Total 45 lei 80 bani, charged as 9 euros 21 cents."*
+- **Currency:** the shop prices everything in **euros**, the currency PayPal charges, so the total you hear is exactly the amount PayPal takes: *"Total 9 euros 18 cents."*
 - **Fallback:** if the sandbox app can't save PayPal accounts (Vault not enabled), EchoCart opens PayPal's standard approval page in a popup for each payment instead, and says what to do at each step.
 
 ### Safety rules, enforced in code
@@ -122,7 +122,6 @@ All settings come from environment variables or `.env`.
 |---|---|---|
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | empty | Sandbox app credentials. Leave them empty and EchoCart runs with payments turned off. |
 | `PAYPAL_API_BASE` | `https://api-m.sandbox.paypal.com` | Must be the sandbox URL, or the app won't start. |
-| `EUR_PER_RON` | `0.201` | Fixed demo exchange rate. |
 | `LLM_MODE` | `anthropic` | `anthropic` uses Claude. `offline` uses a deterministic keyword parser (no key needed). Without `ANTHROPIC_API_KEY`, EchoCart falls back to offline mode. |
 | `ANTHROPIC_API_KEY` | empty | Claude API key. |
 | `ANTHROPIC_MODEL` | `claude-opus-5-5` | Model name. |
@@ -134,7 +133,7 @@ All settings come from environment variables or `.env`.
 
 | Say | What happens |
 |---|---|
-| "two packs of AA batteries under 50 lei" | Builds a cart within your budget and reads it back. |
+| "two packs of AA batteries under 10 euros" | Builds a cart within your budget and reads it back. |
 | "double a batteries", "baterii AA", "hârtie igienică" | Misheard words and Romanian product names work too. |
 | "remove the batteries", "make it three", "cheaper option", "add some sponges" | Changes the cart and reads it back. You need to say yes again. |
 | "yes", "yes, pay", "confirm" | Pays, but only straight after a read-back. |
@@ -145,7 +144,7 @@ All settings come from environment variables or `.env`.
 | "same as last time", "order it again" | Rebuilds your last order with today's prices and reads it back. |
 | "where's my order?", "what did I order?" | Delivery date of your last order; your last three orders. |
 | "how much is coffee?", "what tea do you have?" | Prices and options. The cart doesn't change. |
-| "set my spending limit to 100 lei", "what's my limit?", "remove my spending limit" | EchoCart won't pay for an order above the limit. Lowering it is immediate; raising or removing it needs a yes. It can also be set in Settings. |
+| "set my spending limit to 20 euros", "what's my limit?", "remove my spending limit" | EchoCart won't pay for an order above the limit. Lowering it is immediate; raising or removing it needs a yes. It can also be set in Settings. |
 | "link PayPal", "unlink my PayPal" | Starts the one-time account link, or deletes the saved account after a yes. |
 | "set a PIN" | Moves you to the PIN settings. For privacy the PIN is typed (4 to 8 digits), never spoken. Choose every payment or only payments over an amount. |
 | "help" | Lists these commands. |
@@ -191,7 +190,7 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 100 tests:
+The suite has 99 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
 - **Safety rules** (`test_safety.py`): no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
@@ -223,7 +222,6 @@ tests/     unit tests, fixtures/utterances.json, manual/vault_spike.py
 ## Known limitations
 
 - **Single shopper per server.** Conversations are kept in memory, and the linked account and order history sit in one JSON file. That suits a demo, not production.
-- **Fixed exchange rate**, because PayPal REST doesn't support RON.
 - **No fraud-prevention data yet.** PayPal recommends sending fraud-prevention ("risk") data with payments that use a saved account; EchoCart doesn't include PayPal's FraudNet script yet.
 - **Speech recognition depends on the browser.** Chrome sends audio to Google's speech service; Safari doesn't support recognition at all, so the typing box is used.
 - **The product names and brands in the catalogue are invented.**

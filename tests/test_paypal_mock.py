@@ -146,7 +146,7 @@ class SandboxOnly(unittest.TestCase):
             PayPalClient("id", "secret", PaymentLog(Path("unused")), api_base="https://api-m.paypal.com")
 
     def test_settings_refuse_live_url(self):
-        s = Settings("id", "secret", "https://api-m.paypal.com", Decimal("0.201"), "offline",
+        s = Settings("id", "secret", "https://api-m.paypal.com", "offline",
                      "", "m", "low", "http://localhost:8000", Path("."))
         with self.assertRaises(LiveCredentialsRefused):
             s.assert_sandbox()

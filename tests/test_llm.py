@@ -16,7 +16,6 @@ from backend.llm import AnthropicCartParser, LLMError, OfflineCartParser
 from backend.safety import Rejected, Validated, validate_llm_output
 
 CATALOG = Catalog.load()
-RATE = Decimal("0.201")
 TODAY = date(2026, 11, 6)
 FIXTURES = json.loads((Path(__file__).parent / "fixtures" / "utterances.json").read_text(encoding="utf-8"))
 
@@ -30,7 +29,7 @@ class OfflineFixtures(unittest.TestCase):
         for case in FIXTURES:
             with self.subTest(case["utterance"]):
                 raw = parser.parse_sync(case["utterance"], case.get("current_cart", []))
-                result = validate_llm_output(raw, case["utterance"], CATALOG, RATE, today=TODAY)
+                result = validate_llm_output(raw, case["utterance"], CATALOG, today=TODAY)
                 expect = case["expect"]
                 if expect.get("rejected"):
                     self.assertIsInstance(result, Rejected, raw)
@@ -47,7 +46,7 @@ class OfflineQuantityEdits(unittest.TestCase):
 
     def edit(self, utterance):
         raw = OfflineCartParser(CATALOG).parse_sync(utterance, self.CART)
-        result = validate_llm_output(raw, utterance, CATALOG, RATE, today=TODAY)
+        result = validate_llm_output(raw, utterance, CATALOG, today=TODAY)
         self.assertIsInstance(result, Validated, getattr(result, "reason", raw))
         self.assertEqual(result.response.action, "edit_cart")
         return result.cart.as_items()
@@ -83,7 +82,7 @@ class AnthropicParser(unittest.TestCase):
 
     def test_parses_json_text_block(self):
         cart = {"action": "propose_cart", "items": [{"product_id": "bat-aa-4-vm", "quantity": 1}],
-                "question": None, "spoken_summary": "One pack of AA batteries.", "budget_lei": None}
+                "question": None, "spoken_summary": "One pack of AA batteries.", "budget_eur": None}
         out = self.run_parse({"stop_reason": "end_turn", "content": [
             {"type": "thinking", "thinking": ""}, {"type": "text", "text": json.dumps(cart)}]})
         self.assertEqual(out, cart)

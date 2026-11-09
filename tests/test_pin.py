@@ -133,10 +133,10 @@ class PinDialog(DialogBase):
         self.assertIn("Payment done", self.pin("4821").speech)
 
     def test_threshold_only_asks_above_amount(self):
-        self.set_pin("4821", over="50")
-        self.say("two packs of AA batteries")     # 45.80 lei
+        self.set_pin("4821", over="10")
+        self.say("two packs of AA batteries")     # 9.18 euros
         self.assertIn("Payment done", self.say("yes").speech)
-        self.say("three packs of AA batteries")   # 68.70 lei
+        self.say("three packs of AA batteries")   # 13.77 euros
         self.assertEqual(self.say("yes").action, {"type": "pin"})
 
     def test_lockout_blocks_payments_then_expires(self):
@@ -157,13 +157,13 @@ class PinDialog(DialogBase):
         self.assertIn("Payment done", self.pin("4821").speech)
 
     def test_raising_the_limit_and_unlinking_need_the_pin(self):
-        self.say("set my spending limit to 50 lei")
-        self.set_pin("4821", over="1000")  # payments under 1000 lei don't ask
-        self.say("raise my limit to 200 lei")
+        self.say("set my spending limit to 10 euros")
+        self.set_pin("4821", over="1000")  # payments under 1000 euros don't ask
+        self.say("raise my limit to 40 euros")
         self.assertEqual(self.say("yes").action, {"type": "pin"})
-        self.assertEqual(self.store.spending_limit, Decimal("50"))
+        self.assertEqual(self.store.spending_limit, Decimal("10"))
         self.pin("4821")
-        self.assertEqual(self.store.spending_limit, Decimal("200"))
+        self.assertEqual(self.store.spending_limit, Decimal("40"))
 
         self.say("unlink my PayPal")
         self.assertEqual(self.say("yes").action, {"type": "pin"})
@@ -175,7 +175,7 @@ class PinDialog(DialogBase):
         self.say("two packs of AA batteries")
         self.say("yes")
         self.set_pin("4821")
-        self.assertIn("Spending limit set", self.say("set my spending limit to 30 lei").speech)
+        self.assertIn("Spending limit set", self.say("set my spending limit to 6 euros").speech)
         self.say("refund my last order")
         self.assertIn("Refund done", self.say("yes").speech)
 
@@ -202,7 +202,7 @@ class PinDialog(DialogBase):
     def test_replies_report_pin_state_without_the_pin(self):
         r = self.set_pin("4821", over="100")
         self.assertTrue(r.pin_set)
-        self.assertEqual(r.pin_over_ron, "100")
+        self.assertEqual(r.pin_over_eur, "100")
         self.assertNotIn("4821", json.dumps(r.to_json()))
 
 
@@ -210,10 +210,10 @@ class PinApi(unittest.TestCase):
     def test_pin_endpoints_and_log_never_contain_the_pin(self):
         tmp = tempfile.TemporaryDirectory()
         deps = Deps(CATALOG, OfflineCartParser(CATALOG), None, Store(Path(tmp.name) / "s.json"),
-                    Decimal("0.201"), "http://localhost:8000", today=lambda: TODAY)
+                    "http://localhost:8000", today=lambda: TODAY)
         with TestClient(create_app(deps)) as client:
             sid = client.post("/api/session").json()["session_id"]
-            r = client.post("/api/pin/set", json={"session_id": sid, "new_pin": "4821", "over_ron": "0"}).json()
+            r = client.post("/api/pin/set", json={"session_id": sid, "new_pin": "4821", "over_eur": "0"}).json()
             self.assertIn("PIN set", r["speech"])
             client.post("/api/utterance", json={"session_id": sid, "text": "dish soap"})
             r = client.post("/api/utterance", json={"session_id": sid, "text": "yes"}).json()

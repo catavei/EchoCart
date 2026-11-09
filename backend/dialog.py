@@ -24,8 +24,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Callable, Literal
 
-from .cart import (Catalog, CartError, PricedCart, price_cart, readback, ron_to_eur, say_date,
-                   say_eur, say_lei)
+from .cart import Catalog, CartError, PricedCart, price_cart, readback, say_date, say_eur
 from .llm import CartParser, LLMError, OfflineCartParser
 from .paypal_client import PayPalClient, PayPalError, PayPalUnreachable, _link, first_capture_id
 from .safety import (ConfirmationGate, ConfirmKind, Rejected, is_confirmation, normalize_utterance,
@@ -36,7 +35,7 @@ from .store import OrderLine, OrderRecord, Store
 log = logging.getLogger("echocart.dialog")
 
 HELP = (
-    "Say what you'd like to buy, for example: two packs of AA batteries under 50 lei. "
+    "Say what you'd like to buy, for example: two packs of AA batteries under 10 euros. "
     "I'll read the cart back with the total. Then say yes to pay, or ask for a change: "
     "remove an item, make it three, or cheaper option. "
     "You can also ask how much something costs, say same as last time, ask where's my order, "
@@ -88,10 +87,10 @@ class Reply:
     action: dict | None = None         # {"type": "link"} | {"type": "approve", "url": ...}
     awaiting: ConfirmKind | None = None
     linked: bool = False
-    spending_limit_ron: str | None = None
+    spending_limit_eur: str | None = None
     receipt: dict | None = None
     pin_set: bool = False
-    pin_over_ron: str | None = None    # payments above this ask for the PIN ("0" = every payment)
+    pin_over_eur: str | None = None    # payments above this ask for the PIN ("0" = every payment)
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -103,7 +102,6 @@ class Deps:
     parser: CartParser
     paypal: PayPalClient | None
     store: Store
-    eur_per_ron: Decimal
     base_url: str
     today: Callable[[], date] = date.today
     matcher: OfflineCartParser | None = None
@@ -119,7 +117,6 @@ class RefundPlan:
     order: OrderRecord
     lines: list[OrderLine]        # the lines being refunded
     amount_eur: Decimal
-    amount_ron: Decimal
     whole_order: bool
 
     @property
@@ -175,14 +172,14 @@ class Conversation:
         has_pin = self.store.has_pin
         reply = Reply(speech=speech, cart=self.cart.to_json() if self.cart else None,
                       awaiting=arm[0] if arm else None, linked=self.store.linked,
-                      spending_limit_ron=str(limit) if limit is not None else None,
-                      pin_set=has_pin, pin_over_ron=str(self.store.pin_over_ron) if has_pin else None, **kw)
+                      spending_limit_eur=str(limit) if limit is not None else None,
+                      pin_set=has_pin, pin_over_eur=str(self.store.pin_over_eur) if has_pin else None, **kw)
         self.last_reply = reply
         return reply
 
     def _over_limit(self, cart: PricedCart) -> bool:
         limit = self.store.spending_limit
-        return limit is not None and cart.total_ron > limit
+        return limit is not None and cart.total_eur > limit
 
     def _propose(self, prefix: str = "") -> Reply:
         """Read the cart back. Arms payment only if the cart is within the spending limit."""
@@ -190,8 +187,8 @@ class Conversation:
         if self._over_limit(self.cart):
             limit = self.store.spending_limit
             return self._say(
-                f"{prefix}That comes to {say_lei(self.cart.total_ron)}, over your spending limit of "
-                f"{say_lei(limit)} per order, so I can't pay for it. Remove something, ask for a cheaper option, "
+                f"{prefix}That comes to {say_eur(self.cart.total_eur)}, over your spending limit of "
+                f"{say_eur(limit)} per order, so I can't pay for it. Remove something, ask for a cheaper option, "
                 "or say raise my limit to a new amount.", priority="assertive")
         return self._say(prefix + readback(self.cart, self.deps.today()),
                          arm=("payment", self.cart.fingerprint))
@@ -261,7 +258,7 @@ class Conversation:
             return self._say_limit()
         if _LIMIT_OFF.search(norm):
             return self._request_limit(None)
-        m = _LIMIT_SET.search(norm.replace(" lei", "").replace(" ron", ""))
+        m = _LIMIT_SET.search(re.sub(r" (?:euros?|eur)\b", "", norm))
         if m and "limit" in norm:
             amount = _parse_amount(m.group(1) or m.group(2))
             if amount is not None and amount > 0:
@@ -304,7 +301,7 @@ class Conversation:
         if not self.store.has_pin:
             return False
         if kind == "payment":
-            return self.cart is not None and self.cart.total_ron > self.store.pin_over_ron
+            return self.cart is not None and self.cart.total_eur > self.store.pin_over_eur
         return kind in ("limit", "unlink")  # limit only reaches here when raising or removing it
 
     def _current_fp(self, kind: ConfirmKind) -> str | None:
@@ -370,9 +367,9 @@ class Conversation:
             return self._pin_locked()
         return self._wrong_pin("Nothing was changed.")
 
-    def set_pin(self, new_pin: str | None, current_pin: str | None, over_ron: Decimal) -> Reply:
+    def set_pin(self, new_pin: str | None, current_pin: str | None, over_eur: Decimal) -> Reply:
         had = self.store.has_pin
-        if over_ron < 0:
+        if over_eur < 0:
             return self._say("The amount can't be negative. Nothing was changed.", priority="assertive",
                              earcon="error")
         if had:
@@ -380,15 +377,15 @@ class Conversation:
             if refused:
                 return refused
         if had and not new_pin:  # keep the PIN, change when it's asked for
-            self.store.set_pin_over(over_ron)
+            self.store.set_pin_over(over_eur)
             speech = "PIN setting saved."
         elif not valid_pin(new_pin or ""):
             return self._say("A PIN must be 4 to 8 digits. Nothing was changed.", priority="assertive",
                              earcon="error")
         else:
-            self.store.set_pin(new_pin, over_ron)
+            self.store.set_pin(new_pin, over_eur)
             speech = "PIN changed." if had else "PIN set."
-        when = "every payment" if over_ron == 0 else f"payments over {say_lei(over_ron)}"
+        when = "every payment" if over_eur == 0 else f"payments over {say_eur(over_eur)}"
         return self._say(f"{speech} After your yes, I'll ask for it on {when}, and before raising your "
                          "spending limit or unlinking PayPal.", priority="assertive", earcon="success")
 
@@ -412,7 +409,7 @@ class Conversation:
             log.warning("parser failed: %s", e)
             return self._say("Sorry, I had trouble understanding that. Please try again, or say help.",
                              priority="assertive", earcon="error")
-        result = validate_llm_output(raw, text, self.deps.catalog, self.deps.eur_per_ron,
+        result = validate_llm_output(raw, text, self.deps.catalog,
                                      today=self.deps.today())
         if isinstance(result, Rejected):
             log.info("rejected LLM output: %s", result.reason)
@@ -438,7 +435,7 @@ class Conversation:
         parts = []
         for p in products[:4]:
             stock = "" if p.stock else ", out of stock"
-            parts.append(f"{p.brand} {p.name}, {p.pack_size}: {say_lei(p.price_ron)}{stock}")
+            parts.append(f"{p.brand} {p.name}, {p.pack_size}: {say_eur(p.price_eur)}{stock}")
         more = f" And {len(products) - 4} more." if len(products) > 4 else ""
         tail = " Your cart hasn't changed." if self.cart else " Say what you'd like and how many."
         return self._say("; ".join(parts) + "." + more + tail)
@@ -522,19 +519,19 @@ class Conversation:
     def _receipt(self, order: dict, cart: PricedCart) -> Reply:
         capture_id = first_capture_id(order)
         record = OrderRecord(
-            order_id=order["id"], capture_id=capture_id or "", total_ron=str(cart.total_ron),
-            total_eur=str(cart.total_eur), delivery_date=cart.delivery_date.isoformat(),
+            order_id=order["id"], capture_id=capture_id or "", total_eur=str(cart.total_eur),
+            delivery_date=cart.delivery_date.isoformat(),
             summary=self._summary(cart), created_at=self.deps.today().isoformat(),
-            items=[OrderLine(l.product.id, l.product.spoken_name, l.quantity, str(l.subtotal_ron))
+            items=[OrderLine(l.product.id, l.product.spoken_name, l.quantity, str(l.subtotal_eur))
                    for l in cart.lines])
         self.store.add_order(record)
         self.cart = None
         return self._say(
-            f"Payment done. Order number ending {_ending(order['id'])}. Charged {say_eur(cart.total_eur)}, "
-            f"that's {say_lei(cart.total_ron)}. Delivery {say_date(cart.delivery_date, self.deps.today())}.",
+            f"Payment done. Order number ending {_ending(order['id'])}. Charged {say_eur(cart.total_eur)}. "
+            f"Delivery {say_date(cart.delivery_date, self.deps.today())}.",
             priority="assertive", earcon="success",
             receipt={"order_id": order["id"], "capture_id": capture_id, "total_eur": str(cart.total_eur),
-                     "total_ron": str(cart.total_ron), "delivery_date": cart.delivery_date.isoformat()})
+                     "delivery_date": cart.delivery_date.isoformat()})
 
     # ---- orders: reorder, status, history -------------------------------
     def _reorder(self) -> Reply:
@@ -545,7 +542,7 @@ class Conversation:
             return self._say("I can't see the items of your last order. Tell me what you'd like to buy.")
         try:
             cart = price_cart([{"product_id": l.product_id, "quantity": l.quantity} for l in last.items],
-                              self.deps.catalog, self.deps.eur_per_ron, self.deps.today())
+                              self.deps.catalog, self.deps.today())
         except CartError as e:
             return self._say(f"I can't repeat your last order exactly. {e} Tell me what you'd like instead.")
         self.cart = cart
@@ -601,19 +598,17 @@ class Conversation:
         if not chosen or len(chosen) == len(open_lines):
             lines = open_lines
             amount_eur = order.remaining_eur
-            amount_ron = sum((Decimal(l.subtotal_ron) for l in lines), Decimal("0")) if lines else Decimal(order.total_ron)
             whole = True
         else:
             lines = chosen
-            amount_ron = sum((Decimal(l.subtotal_ron) for l in lines), Decimal("0"))
-            amount_eur = min(ron_to_eur(amount_ron, self.deps.eur_per_ron), order.remaining_eur)
+            amount_eur = min(sum((Decimal(l.subtotal_eur) for l in lines), Decimal("0")), order.remaining_eur)
             whole = False
-        self.refund_plan = RefundPlan(order, lines, amount_eur, amount_ron, whole)
+        self.refund_plan = RefundPlan(order, lines, amount_eur, whole)
         return self._speak_refund()
 
     def _speak_refund(self, prefix: str = "") -> Reply:
         plan = self.refund_plan
-        money = f"{say_eur(plan.amount_eur)} back to your PayPal, that's {say_lei(plan.amount_ron)}."
+        money = f"{say_eur(plan.amount_eur)} back to your PayPal."
         if plan.whole_order:
             what = "Refund your last order" if Decimal(plan.order.refunded_eur) == 0 else "Refund the rest of your last order"
             items = "; ".join(l.name for l in plan.lines) or plan.order.summary
@@ -680,8 +675,8 @@ class Conversation:
     def _say_limit(self, prefix: str = "") -> Reply:
         limit = self.store.spending_limit
         if limit is None:
-            return self._say(prefix + "You have no spending limit. Say set my limit to, and an amount in lei, to add one.")
-        return self._say(prefix + f"Your spending limit is {say_lei(limit)} per order.")
+            return self._say(prefix + "You have no spending limit. Say set my limit to, and an amount in euros, to add one.")
+        return self._say(prefix + f"Your spending limit is {say_eur(limit)} per order.")
 
     def _request_limit(self, new: Decimal | None, prefix: str = "") -> Reply:
         current = self.store.spending_limit
@@ -692,7 +687,7 @@ class Conversation:
             return self._say("You have no spending limit to remove.")
         self.pending_limit = new
         change = ("remove your spending limit, so any order total can be paid" if new is None
-                  else f"raise your spending limit from {say_lei(current)} to {say_lei(new)} per order")
+                  else f"raise your spending limit from {say_eur(current)} to {say_eur(new)} per order")
         return self._say(f"{prefix}This will {change}. Say yes to confirm, or no to keep it.",
                          arm=("limit", self._limit_fp(new)))
 
@@ -700,7 +695,7 @@ class Conversation:
         self.pending_limit = None
         self.store.set_spending_limit(new)
         speech = ("Spending limit removed." if new is None
-                  else f"Spending limit set. I won't pay for any order over {say_lei(new)}.")
+                  else f"Spending limit set. I won't pay for any order over {say_eur(new)}.")
         if self.cart:
             return self._propose(speech + " ")
         return self._say(speech)

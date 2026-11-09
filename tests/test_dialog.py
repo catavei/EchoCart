@@ -33,7 +33,7 @@ class DialogBase(unittest.TestCase):
                                    transport=httpx.MockTransport(self.fake))
         self.store = Store(data / "store.json")
         self.deps = Deps(CATALOG, OfflineCartParser(CATALOG), self.paypal, self.store,
-                         Decimal("0.201"), "http://localhost:8000", today=lambda: TODAY)
+                         "http://localhost:8000", today=lambda: TODAY)
         self.conv = Conversation(self.deps)
         self.loop = asyncio.new_event_loop()
 
@@ -102,17 +102,17 @@ class PurchaseFlow(DialogBase):
         self.assertEqual(linked.earcon, "success")
         self.assertTrue(self.store.linked)
 
-        r = self.say("two packs of AA batteries under 50 lei")
+        r = self.say("two packs of AA batteries under 10 euros")
         self.assertEqual(r.awaiting, "payment")
-        self.assertIn("Total 45 lei 80 bani, charged as 9 euros 21 cents", r.speech)
+        self.assertIn("Total 9 euros 18 cents.", r.speech)
         self.assertEqual(self.orders_created(), [])
 
         r = self.say("Yes.")
         self.assertIn("Payment done", r.speech)
         self.assertEqual((r.priority, r.earcon), ("assertive", "success"))
-        self.assertIn("Charged 9 euros 21 cents", r.speech)
+        self.assertIn("Charged 9 euros 18 cents.", r.speech)
         [order] = self.orders_created()
-        self.assertEqual(order["purchase_units"][0]["amount"]["value"], "9.21")
+        self.assertEqual(order["purchase_units"][0]["amount"]["value"], "9.18")
         self.assertEqual(len(self.store.data.orders), 1)
         self.assertIsNone(self.conv.cart)
 
@@ -131,7 +131,7 @@ class PurchaseFlow(DialogBase):
         self.assertEqual(r.awaiting, "payment")
         self.say("yes")
         [order] = self.orders_created()
-        self.assertEqual(order["purchase_units"][0]["amount"]["value"], "13.81")  # 68.70 lei
+        self.assertEqual(order["purchase_units"][0]["amount"]["value"], "13.77")  # 3 x 4.59
 
     def test_near_yes_rereads_instead_of_paying(self):
         self.link()
@@ -168,7 +168,7 @@ class PurchaseFlow(DialogBase):
 
     def test_over_budget_shows_no_cart(self):
         self.link()
-        r = self.say("five packs of AA batteries under 50 lei")
+        r = self.say("five packs of AA batteries under 10 euros")
         self.assertIsNone(r.cart)
         self.assertIsNone(r.awaiting)
         self.assertIn("budget", r.speech)
@@ -201,7 +201,7 @@ class RefundFlow(DialogBase):
         self.buy()
         r = self.say("refund my last order")
         self.assertEqual(r.awaiting, "refund")
-        self.assertIn("9 euros 21 cents back to your PayPal", r.speech)
+        self.assertIn("9 euros 18 cents back to your PayPal.", r.speech)
         self.assertEqual(self.refunds(), [])
         r = self.say("yes")
         self.assertIn("Refund done", r.speech)
@@ -249,7 +249,7 @@ class Api(unittest.TestCase):
     def test_frontend_files_revalidate(self):
         tmp = tempfile.TemporaryDirectory()
         deps = Deps(CATALOG, OfflineCartParser(CATALOG), None, Store(Path(tmp.name) / "s.json"),
-                    Decimal("0.201"), "http://localhost:8000", today=lambda: TODAY)
+                    "http://localhost:8000", today=lambda: TODAY)
         with TestClient(create_app(deps)) as client:
             for path in ("/", "/app.js"):
                 self.assertEqual(client.get(path).headers.get("cache-control"), "no-cache", path)
@@ -258,7 +258,7 @@ class Api(unittest.TestCase):
     def test_session_and_utterance(self):
         tmp = tempfile.TemporaryDirectory()
         deps = Deps(CATALOG, OfflineCartParser(CATALOG), None, Store(Path(tmp.name) / "s.json"),
-                    Decimal("0.201"), "http://localhost:8000", today=lambda: TODAY)
+                    "http://localhost:8000", today=lambda: TODAY)
         with TestClient(create_app(deps)) as client:
             s = client.post("/api/session").json()
             self.assertIn("Welcome", s["speech"])

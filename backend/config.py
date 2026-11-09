@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from decimal import Decimal
 from pathlib import Path
 
 SANDBOX_API_BASE = "https://api-m.sandbox.paypal.com"
@@ -36,7 +35,6 @@ class Settings:
     paypal_client_id: str
     paypal_client_secret: str
     paypal_api_base: str
-    eur_per_ron: Decimal
     llm_mode: str
     anthropic_api_key: str
     anthropic_model: str
@@ -59,7 +57,6 @@ def get_settings() -> Settings:
         paypal_client_id=env("PAYPAL_CLIENT_ID", ""),
         paypal_client_secret=env("PAYPAL_CLIENT_SECRET", ""),
         paypal_api_base=env("PAYPAL_API_BASE", SANDBOX_API_BASE),
-        eur_per_ron=Decimal(env("EUR_PER_RON", "0.201")),
         llm_mode=env("LLM_MODE", "anthropic").lower(),
         anthropic_api_key=env("ANTHROPIC_API_KEY", ""),
         anthropic_model=env("ANTHROPIC_MODEL", "claude-opus-5-5"),

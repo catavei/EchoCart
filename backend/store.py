@@ -22,7 +22,7 @@ class OrderLine:
     product_id: str
     name: str
     quantity: int
-    subtotal_ron: str
+    subtotal_eur: str
     refunded: bool = False
 
 
@@ -30,7 +30,6 @@ class OrderLine:
 class OrderRecord:
     order_id: str
     capture_id: str
-    total_ron: str
     total_eur: str
     delivery_date: str
     summary: str
@@ -58,10 +57,10 @@ class OrderRecord:
 class StoreData:
     vault_id: str | None = None
     customer_id: str | None = None
-    spending_limit_ron: str | None = None
+    spending_limit_eur: str | None = None
     orders: list[OrderRecord] = field(default_factory=list)
     pin_hash: str | None = None            # salted scrypt hash, never the PIN itself
-    pin_over_ron: str = "0"                # ask for the PIN on payments above this ("0" = every payment)
+    pin_over_eur: str = "0"                # ask for the PIN on payments above this ("0" = every payment)
     pin_failures: int = 0
     pin_locked_until: str | None = None    # ISO timestamp (UTC)
 
@@ -89,9 +88,9 @@ class Store:
         raw = json.loads(self.path.read_text(encoding="utf-8"))
         return StoreData(
             vault_id=raw.get("vault_id"), customer_id=raw.get("customer_id"),
-            spending_limit_ron=raw.get("spending_limit_ron"),
+            spending_limit_eur=raw.get("spending_limit_eur"),
             orders=[_order_from_json(o) for o in raw.get("orders", [])],
-            pin_hash=raw.get("pin_hash"), pin_over_ron=raw.get("pin_over_ron") or "0",
+            pin_hash=raw.get("pin_hash"), pin_over_eur=raw.get("pin_over_eur") or "0",
             pin_failures=int(raw.get("pin_failures") or 0), pin_locked_until=raw.get("pin_locked_until"))
 
     def save(self) -> None:
@@ -117,10 +116,10 @@ class Store:
     # ---- spending limit
     @property
     def spending_limit(self) -> Decimal | None:
-        return Decimal(self.data.spending_limit_ron) if self.data.spending_limit_ron else None
+        return Decimal(self.data.spending_limit_eur) if self.data.spending_limit_eur else None
 
     def set_spending_limit(self, limit: Decimal | None) -> None:
-        self.data.spending_limit_ron = str(limit) if limit is not None else None
+        self.data.spending_limit_eur = str(limit) if limit is not None else None
         self.save()
 
     # ---- payment PIN
@@ -129,21 +128,21 @@ class Store:
         return bool(self.data.pin_hash)
 
     @property
-    def pin_over_ron(self) -> Decimal:
-        return Decimal(self.data.pin_over_ron or "0")
+    def pin_over_eur(self) -> Decimal:
+        return Decimal(self.data.pin_over_eur or "0")
 
     @property
     def pin_tries_left(self) -> int:
         return MAX_TRIES - self.data.pin_failures
 
-    def set_pin(self, pin: str, over_ron: Decimal) -> None:
+    def set_pin(self, pin: str, over_eur: Decimal) -> None:
         self.data.pin_hash = hash_pin(pin)
-        self.data.pin_over_ron = str(over_ron)
+        self.data.pin_over_eur = str(over_eur)
         self.data.pin_failures, self.data.pin_locked_until = 0, None
         self.save()
 
-    def set_pin_over(self, over_ron: Decimal) -> None:
-        self.data.pin_over_ron = str(over_ron)
+    def set_pin_over(self, over_eur: Decimal) -> None:
+        self.data.pin_over_eur = str(over_eur)
         self.save()
 
     def pin_lock_minutes_left(self, now: datetime) -> int:
@@ -154,7 +153,7 @@ class Store:
 
     def clear_pin(self) -> None:
         self.data.pin_hash = None
-        self.data.pin_over_ron = "0"
+        self.data.pin_over_eur = "0"
         self.data.pin_failures, self.data.pin_locked_until = 0, None
         self.save()
 

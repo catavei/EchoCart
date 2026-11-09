@@ -70,7 +70,7 @@
         <output id="rate-value" for="rate">1.0×</output>
       </div>
       <form id="limit-form" class="setting" aria-describedby="limit-help">
-        <label for="limit">Spending limit per order, in lei</label>
+        <label for="limit">Spending limit per order, in euros</label>
         <input id="limit" type="number" inputmode="decimal" min="1" step="1" autocomplete="off">
         <button type="submit">Set limit</button>
         <button id="limit-remove" type="button" class="secondary">Remove limit</button>
@@ -89,7 +89,7 @@
             <input id="pin-new" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off">
           </div>
           <div class="field">
-            <label for="pin-over">Ask for it on payments over this many lei (0 means every payment)</label>
+            <label for="pin-over">Ask for it on payments over this many euros (0 means every payment)</label>
             <input id="pin-over" type="number" inputmode="numeric" min="0" step="1" value="0" autocomplete="off">
           </div>
           <div class="pin-buttons">
