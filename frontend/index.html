@@ -30,16 +30,22 @@
         <button id="open-approval" class="secondary" type="button" hidden>Open PayPal to approve the payment</button>
       </div>
 
-      <!-- Shown only after a spoken yes that needs the PIN. Typed, never spoken or logged. -->
-      <form id="pin-form" class="type-form pin-form" hidden>
-        <label for="pin">Your PIN</label>
-        <div class="type-row">
-          <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8"
-                 autocomplete="off" aria-describedby="pin-help">
-          <button type="submit">Confirm</button>
-        </div>
-        <p id="pin-help" class="hint">4 to 8 digits. EchoCart never reads your PIN aloud.</p>
-      </form>
+      <!-- Opens only after a spoken yes that needs the PIN. The keyboard focus starts in the
+           PIN field; Escape or Cancel cancels. Typed, never spoken or logged. -->
+      <dialog id="pin-dialog" class="pin-dialog" aria-labelledby="pin-title" aria-describedby="pin-said">
+        <form id="pin-form" class="type-form">
+          <h2 id="pin-title">Type your PIN</h2>
+          <p id="pin-said" class="said" role="alert"></p>
+          <label for="pin">Your PIN</label>
+          <div class="type-row">
+            <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8"
+                   autocomplete="off" aria-describedby="pin-help">
+            <button type="submit">Confirm</button>
+          </div>
+          <p id="pin-help" class="hint">4 to 8 digits, then Enter. EchoCart never reads your PIN aloud. Escape cancels.</p>
+          <button id="pin-cancel" type="button" class="secondary">Cancel</button>
+        </form>
+      </dialog>
     </section>
 
     <section aria-labelledby="type-heading">

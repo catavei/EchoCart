@@ -49,7 +49,7 @@ EchoCart is designed around three things a blind shopper needs to trust a paymen
 | If the cart changes, or anything else is said, the yes no longer counts; a new read-back and a new yes are required | `ConfirmationGate.consume` checks the cart fingerprint; every non-read-back reply disarms it |
 | Refunds, unlinking PayPal, and raising or removing the spending limit each need their own read-back and yes. A yes given for one can't approve another | `ConfirmationGate` kinds `payment` / `refund` / `unlink` / `limit` |
 | An order over the spending limit is never offered for a yes, and the payment step checks the limit again | `dialog.Conversation._propose`, `_pay` |
-| Optional PIN: when set, a valid yes still needs a **typed** PIN (never spoken) for payments over a chosen amount, raising or removing the limit, and unlinking PayPal. Saying anything else cancels that step; the PIN alone never pays. Three wrong tries lock these for 10 minutes. Stored only as a salted scrypt hash | `pin.py`, `Store.check_pin`, `Conversation._confirmed` / `submit_pin`; the PIN has its own endpoint and never enters the conversation or logs |
+| Optional PIN: when set, a valid yes still needs a **typed** PIN (never spoken) for payments over a chosen amount, raising or removing the limit, and unlinking PayPal. Escape, Cancel or saying anything else cancels that step; the PIN alone never pays. Three wrong tries lock these for 10 minutes. Stored only as a salted scrypt hash | `pin.py`, `Store.check_pin`, `Conversation._confirmed` / `submit_pin`; the PIN has its own endpoint and never enters the conversation or logs |
 | If PayPal doesn't answer, EchoCart says it can't tell yet (not "nothing was charged"), and paying the same cart again reuses the same `PayPal-Request-Id`, so it can't charge twice | `PayPalClient._send`, `Conversation.unanswered_payment` |
 | LLM output that fails the schema, names an unknown product id, or goes over budget is never shown | `safety.validate_llm_output` |
 | Prices come from `catalog.json`, never from the LLM | `cart.price_cart` |
@@ -189,7 +189,7 @@ The target is **WCAG 2.2 AA**.
 - **The PayPal window opens on a key press**, because browsers block popups that aren't triggered by the user. EchoCart moves focus to the button and says "press Enter". The page you return to from PayPal announces the result and closes itself.
 - **Layout and contrast:** visible 4px focus outlines, colour tokens checked for at least 4.5:1 text contrast in light and dark mode, single-column layout with no fixed widths (works at 200% zoom and 375px wide), and reduced motion respected.
 - **Typing is always available** for browsers without speech recognition, noisy rooms, or shoppers who prefer typing.
-- **A PIN you type, not say:** speaking a PIN aloud lets anyone nearby hear it. When the PIN is needed, EchoCart says "Type your PIN and press Enter" and moves focus to a masked numeric field (number keypad on phones). The digits never appear in the conversation log, and "One moment." is spoken if PayPal is slow.
+- **A PIN you type, not say:** speaking a PIN aloud lets anyone nearby hear it. When the PIN is needed, a popup opens with the keyboard focus already in a masked numeric field (number keypad on phones). EchoCart says "Type your PIN and press Enter"; Enter confirms and Escape or Cancel closes the popup and cancels the step aloud. The popup blocks the rest of the page, so focus can't wander off while money waits. The digits never appear in the conversation log, and "One moment." is spoken if PayPal is slow.
 
 ### Testing log
 

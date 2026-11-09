@@ -93,7 +93,8 @@
   }
 
   // ---- PIN ---------------------------------------------------------------
-  const pinForm = $("pin-form"), pinInput = $("pin");
+  const pinDialog = $("pin-dialog"), pinForm = $("pin-form"), pinInput = $("pin"), pinSaid = $("pin-said");
+  let pinClosedByReply = false;
   const pinSettings = $("pin-settings"), pinStatus = $("pin-status"), pinCurrentRow = $("pin-current-row");
   const pinCurrent = $("pin-current"), pinNew = $("pin-new"), pinNewLabel = $("pin-new-label");
   const pinOver = $("pin-over"), pinRemove = $("pin-remove");
@@ -122,19 +123,28 @@
     speak(reply.speech);
 
     const action = reply.action && reply.action.type;
-    const pinHadFocus = pinForm.contains(document.activeElement);
+    const pinWasOpen = pinDialog.open;
     linkBtn.hidden = action !== "link";
     approveUrl = action === "approve" ? reply.action.url : null;
     approveBtn.hidden = !approveUrl;
-    pinForm.hidden = action !== "pin";
+    if (action === "pin") {
+      // The PIN popup: what EchoCart just said, then the PIN field, with the keyboard focus in it.
+      pinSaid.textContent = reply.speech;
+      pinInput.value = "";
+      if (!pinWasOpen) pinDialog.showModal();
+      pinInput.focus();
+    } else if (pinWasOpen) {
+      pinClosedByReply = true;
+      pinDialog.close();
+    }
+    if (action === "pin") return;
     if (!linkBtn.hidden) linkBtn.focus();
     else if (!approveBtn.hidden) approveBtn.focus();
-    else if (!pinForm.hidden) { pinInput.value = ""; pinInput.focus(); }
     else if (action === "pin_settings") {
       const first = pinCurrentRow.hidden ? pinNew : pinCurrent;
       first.focus();
       first.scrollIntoView({ block: "center" });
-    } else if (pinHadFocus) (talkBtn.disabled ? typed : talkBtn).focus();
+    } else if (pinWasOpen) (talkBtn.disabled ? typed : talkBtn).focus();
   }
 
   // ---- talking to the backend -----------------------------------------
@@ -290,7 +300,7 @@
     event.preventDefault();
     const value = Number(limitInput.value);
     if (!value || value < 1) {
-      handleReply({ speech: "Enter a limit of at least 1 leu.", priority: "assertive", cart: lastReply && lastReply.cart });
+      handleReply({ speech: "Enter a limit of at least 1 euro.", priority: "assertive", cart: lastReply && lastReply.cart });
       return;
     }
     send(`set my spending limit to ${value} euros`);
@@ -322,6 +332,14 @@
       return;
     }
     postReply("/api/pin", { pin }, "(PIN typed)");
+  });
+
+  // Escape or Cancel closes the popup, and the payment or change waiting for the PIN is cancelled aloud.
+  $("pin-cancel").addEventListener("click", () => pinDialog.close());
+  pinDialog.addEventListener("close", () => {
+    pinInput.value = "";
+    if (pinClosedByReply) { pinClosedByReply = false; return; }
+    send("cancel");
   });
 
   pinSettings.addEventListener("submit", (event) => {

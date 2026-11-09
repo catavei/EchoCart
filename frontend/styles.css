@@ -134,7 +134,18 @@ button.secondary { background: var(--bg); color: var(--text); }
   border-radius: 0.5rem;
   background: var(--bg);
 }
-.pin-form { margin-top: 1rem; }
+.pin-dialog {
+  width: min(32rem, calc(100vw - 2rem));
+  padding: 1.5rem;
+  border: 3px solid var(--accent);
+  border-radius: 1rem;
+  background: var(--bg);
+  color: var(--text);
+}
+.pin-dialog::backdrop { background: rgb(0 0 0 / 0.65); }
+.pin-dialog h2 { margin: 0 0 0.75rem; }
+.pin-dialog .said { margin: 0 0 1rem; font-size: 1.1rem; }
+.pin-dialog .hint { margin: 0.6rem 0 1rem; }
 .pin-settings fieldset { border: 2px solid var(--border); border-radius: 0.75rem; padding: 0.75rem 1rem 0.25rem; margin: 0 0 1rem; }
 .pin-settings legend { font-weight: 700; padding: 0 0.4rem; }
 .pin-settings .field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.9rem; max-width: 24rem; }

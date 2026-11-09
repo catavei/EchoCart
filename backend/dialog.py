@@ -44,9 +44,9 @@ HELP = (
     "To protect payments with a PIN, use the PIN settings: a PIN is typed, never spoken."
 )
 PIN_PROMPTS = {
-    "payment": "Type your PIN and press Enter to pay. Or say cancel.",
-    "limit": "Type your PIN and press Enter to change your spending limit. Or say no.",
-    "unlink": "Type your PIN and press Enter to unlink PayPal. Or say no.",
+    "payment": "Type your PIN and press Enter to pay, or press Escape to cancel.",
+    "limit": "Type your PIN and press Enter to change your spending limit, or press Escape to keep it.",
+    "unlink": "Type your PIN and press Enter to unlink PayPal, or press Escape to keep it linked.",
 }
 WELCOME = "Welcome to EchoCart. Press the talk button or the Space bar, then say what you'd like to buy. Say help at any time."
 NOT_LINKED_HINT = " Before your first payment you'll link your PayPal account once."
@@ -357,7 +357,7 @@ class Conversation:
             return self._say(f"Too many wrong PINs, so payments and account changes are locked for {LOCK_MINUTES} "
                              "minutes. Nothing was charged or changed.", priority="assertive", earcon="error")
         self.pending_pin = pending
-        return self._wrong_pin("Type your PIN again, or say cancel.")
+        return self._wrong_pin("Type your PIN again, or press Escape to cancel.")
 
     def _check_current_pin(self, current: str | None) -> Reply | None:
         """None when the current PIN is right; otherwise the reply to give."""

@@ -14,7 +14,7 @@
 | Trusts the AI's numbers | The AI only picks products; every price, total and refund amount comes from the backend |
 | A stray "ok" at any point can trigger a purchase | A yes counts only straight after the exact total is spoken, it has to be only a yes ("yeah, go ahead" pays, "yeah, wait" doesn't), and each yes works once |
 | No guard against mistakes | A per-order spending limit the shopper sets by voice; raising it needs a yes |
-| Anyone in the room can say "yes" | An optional PIN, typed and never spoken, after the yes; 3 wrong tries lock payments |
+| Anyone in the room can say "yes" | An optional PIN, typed in a popup and never spoken, after the yes; 3 wrong tries lock payments |
 | Refunds mean calling support | "Refund just the batteries" gives a partial refund through PayPal Payments v2, spoken back first |
 | Accessibility added at the end | Designed with screen readers first: live regions, earcons and vibration, a "let my screen reader speak" mode, no timeouts |
 
