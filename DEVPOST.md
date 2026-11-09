@@ -43,7 +43,7 @@ Voice assistants can fill a cart, but most of them still hand you to a visual pa
 
 You link your PayPal account **once**, in a popup that EchoCart talks you through. After that, checkout is entirely by voice.
 
-**For merchants:** EchoCart is the voice checkout a shop adds for its blind and low-vision customers. Point it at the shop's product feed (the Shopify-style `products.json`) and the shop's own PayPal app, and the same voice checkout sells that shop's products. The repo includes a sample pharmacy feed.
+**For merchants:** EchoCart is the voice checkout a shop adds for its blind and low-vision customers. Point it at the shop's product feed (the Shopify-style `products.json`) and the shop's own PayPal app, and the same voice checkout sells that shop's products. The repo includes a sample pharmacy feed and a demo shop page for it: a **Shop by voice** button opens EchoCart beside the products, and the shop's own basket and order confirmation follow the conversation.
 
 ## How we built it
 
@@ -60,6 +60,7 @@ You link your PayPal account **once**, in a popup that EchoCart talks you throug
 **Merchant catalogues:**
 - **`CATALOG_URL`** loads a merchant's product feed in the Shopify-style `products.json` shape, from a URL or a file. Each variant becomes a product; prices are read as euros, unavailable variants can't be bought, and a feed in another currency is refused.
 - **The safety rules don't change.** Prices still come only from the feed, and payments go to the merchant's own PayPal account.
+- **A demo shop page** (`/shop/`) lists the same products and embeds EchoCart in a side panel. EchoCart posts each cart and receipt to the page, so the shop's basket highlights what changed and shows the order once it's paid.
 
 **AI (Claude):**
 - **What Claude does.** It turns the shopper's words into structured JSON through a JSON-schema response: an action (`propose_cart`, `edit_cart`, `clarify`, `refund_request`, ...), product ids and quantities, the stated budget, and a clarifying question if the request is ambiguous.

@@ -112,8 +112,20 @@
     if (reply.pin_set && document.activeElement !== pinOver) pinOver.value = String(over);
   }
 
+  // Inside a shop's page (the demo shop at /shop/), EchoCart tells the page about each cart and
+  // receipt, so the shop's own basket and order confirmation follow the conversation.
+  const embedded = window.parent !== window;
+  if (embedded) {
+    document.documentElement.classList.add("embedded");
+    $("cart").closest("section").hidden = true;   // the shop shows the basket itself
+  }
+  function tellShop(reply) {
+    if (embedded) parent.postMessage({ type: "echocart:update", cart: reply.cart || null, receipt: reply.receipt || null }, location.origin);
+  }
+
   function handleReply(reply) {
     lastReply = reply;
+    tellShop(reply);
     renderCart(reply.cart);
     if ("spending_limit_eur" in reply) showLimit(reply.spending_limit_eur);
     showPinSettings(reply);
@@ -181,6 +193,7 @@
   async function startSession() {
     const reply = await post("/api/session");
     sessionId = reply.session_id;
+    tellShop(reply);
     // Browsers block speech before the first key press, so the welcome is shown and announced only.
     renderCart(reply.cart);
     showLimit(reply.spending_limit_eur);

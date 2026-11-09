@@ -107,6 +107,7 @@ class Deps:
     today: Callable[[], date] = date.today
     matcher: OfflineCartParser | None = None
     now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
+    shop_name: str = "Demo shop"   # shown on the demo shop page (/shop/)
 
     def __post_init__(self):
         if self.matcher is None:

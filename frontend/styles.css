@@ -155,3 +155,7 @@ button.secondary { background: var(--bg); color: var(--text); }
 .log { padding-left: 1.25rem; }
 .log li { margin-bottom: 0.5rem; }
 .log .who { font-weight: 700; }
+
+/* Inside a shop's page (/shop/): the shop shows its own name and basket. */
+.embedded header { display: none; }
+.embedded .talk { min-height: 8rem; margin-top: 0.5rem; }

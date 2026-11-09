@@ -42,6 +42,7 @@ class Settings:
     app_base_url: str
     data_dir: Path
     catalog_url: str = ""   # merchant product feed (URL or file); empty = built-in catalogue
+    shop_name: str = "Demo shop"   # the name on the demo shop page
 
     def assert_sandbox(self) -> None:
         if self.paypal_api_base.rstrip("/") != SANDBOX_API_BASE:
@@ -65,6 +66,7 @@ def get_settings() -> Settings:
         app_base_url=env("APP_BASE_URL", "http://localhost:8000").rstrip("/"),
         data_dir=Path(env("DATA_DIR", str(ROOT / "data"))),
         catalog_url=env("CATALOG_URL", "").strip(),
+        shop_name=env("SHOP_NAME", "").strip() or "Demo shop",
     )
     settings.assert_sandbox()
     return settings

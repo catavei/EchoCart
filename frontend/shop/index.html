@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Demo shop</title>
+  <meta name="description" content="A demo shop with EchoCart added as its voice checkout.">
+  <link rel="stylesheet" href="shop.css">
+</head>
+<body>
+  <!-- A demo of how a merchant adds EchoCart to their own website: the products come from the
+       same catalogue EchoCart sells from, and the basket follows the voice conversation. -->
+  <header class="shop-header">
+    <div>
+      <h1 id="shop-name">Demo shop</h1>
+      <p class="demo-note">Demo shop · PayPal sandbox, no real money moves</p>
+    </div>
+    <button id="voice-toggle" class="voice-toggle" type="button" aria-expanded="false" aria-controls="voice-panel">
+      Shop by voice
+    </button>
+  </header>
+
+  <div class="layout">
+    <main>
+      <section id="order" class="order" aria-labelledby="order-heading" hidden>
+        <h2 id="order-heading">Order confirmed</h2>
+        <p id="order-text"></p>
+        <ul id="order-lines" class="order-lines"></ul>
+      </section>
+
+      <section class="basket-area" aria-labelledby="basket-heading">
+        <h2 id="basket-heading">Your basket</h2>
+        <div id="basket"><p class="muted">Your basket is empty.</p></div>
+      </section>
+
+      <section aria-labelledby="products-heading">
+        <h2 id="products-heading">Products</h2>
+        <ul id="products" class="products"><li class="muted">Loading products…</li></ul>
+      </section>
+    </main>
+
+    <aside id="voice-panel" class="voice-panel" aria-labelledby="voice-heading" hidden>
+      <h2 id="voice-heading">Shop by voice with EchoCart</h2>
+      <iframe id="voice-frame" title="EchoCart voice checkout" allow="microphone"></iframe>
+    </aside>
+  </div>
+
+  <script src="shop.js"></script>
+</body>
+</html>

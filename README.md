@@ -128,6 +128,7 @@ All settings come from environment variables or `.env`.
 | `ANTHROPIC_EFFORT` | `low` | Lower effort means faster replies, which matters in a spoken conversation. |
 | `APP_BASE_URL` | `http://localhost:8000` | Where PayPal sends the popup back to. |
 | `CATALOG_URL` | empty | A merchant's product feed, as a URL or a file path. Empty means the demo catalogue. See [Use a merchant's own catalogue](#use-a-merchants-own-catalogue). |
+| `SHOP_NAME` | `Demo shop` | The shop's name on the demo shop page (`/shop/`). |
 | `DATA_DIR` | `./data` | Holds `store.json` (linked account and orders) and `payments.jsonl` (audit log). |
 
 ## Use a merchant's own catalogue
@@ -152,6 +153,17 @@ The feed is the Shopify-style `products.json` shape (Shopify storefronts serve i
 | `product_type`, `tags` | the category and the words the shopper may use; a `delivery:2` tag sets the delivery time in days (default 1) |
 
 Everything else in the feed (descriptions, images, dates) is ignored. The feed is read once at startup and holds up to 500 products, because the whole catalogue goes into Claude's prompt. The safety rules don't change: prices still come only from the feed, never from the model, and the voice checkout, PIN, limit and refunds work the same way. Payments go to the PayPal account whose credentials the app runs with, so each merchant runs EchoCart with their own PayPal app.
+
+### The demo shop page
+
+`/shop/` is a small shop website built from the same catalogue, to show EchoCart the way a merchant would add it: a **Shop by voice** button opens EchoCart in a panel beside the products, with the keyboard focus on its Talk button. Each reply passes the cart and, after a payment, the receipt to the shop page, so the shop's own basket changes as you speak (new and changed lines and the total are highlighted) and an order confirmation appears once PayPal has the money. EchoCart still prices everything, reads it back and waits for the yes; the shop page only displays it.
+
+```bash
+CATALOG_URL=examples/linden-street-pharmacy.json SHOP_NAME="Linden Street Pharmacy" uvicorn backend.app:app
+# then open http://localhost:8000/shop/
+```
+
+In this demo the shop page and EchoCart come from the same server. On a merchant's real site, EchoCart would be embedded from its own origin, and the page would accept its messages only from that origin.
 
 ## What you can say
 
@@ -215,7 +227,7 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 117 tests:
+The suite has 120 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
 - **Safety rules** (`test_safety.py`): the everyday ways to say yes, and the replies that only sound like one; no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
@@ -225,6 +237,7 @@ The suite has 117 tests:
 - **The newer features** (`test_features.py`): spending limit (including that a limit yes can't pay), reorder, order status and history, partial refunds with exact remainders, unlink, and product questions.
 - **PayPal not answering** (`test_paypal_mock.py`, `test_dialog.py`): retries reuse the same request id, the reply never claims nothing was charged, and a second yes can't create a second order.
 - **Merchant product feeds** (`test_feed.py`): the Shopify-style feed becomes products with the right names, prices, stock and delivery; unusable feeds are refused; loading by URL or file; and a whole voice purchase from the sample pharmacy feed.
+- **The demo shop page** (`test_shop.py`): the shop's product list comes from the same catalogue, with stock, and the page is served.
 - **The PIN** (`test_pin.py`): hashing, lockout and expiry, yes then PIN, the PIN alone never pays, anything said cancels the PIN step, the amount threshold, limit and unlink need it, refunds don't, changing it needs the current PIN, and the PIN never appears in replies or the store file.
 
 **Manual end-to-end check against the real sandbox:** run this once with your `.env` filled in. It links a sandbox buyer, pays 1.00 EUR with no approval page, and refunds it.
@@ -241,7 +254,7 @@ Last run on 2026-11-09: the vaulted order came back `COMPLETED` straight from cr
 backend/   app.py (API + PayPal return pages), dialog.py (conversation), safety.py, pin.py, cart.py,
            llm.py (Claude + offline parser), paypal_client.py, store.py, config.py, feed.py,
            catalog.json (41 products), prompts/cart_system.md
-frontend/  index.html, app.js, styles.css, sounds/earcons.js
+frontend/  index.html, app.js, styles.css, sounds/earcons.js; shop/ (the demo shop page)
 examples/  linden-street-pharmacy.json (a sample merchant product feed)
 tests/     unit tests, fixtures/utterances.json, manual/vault_spike.py
 ```
