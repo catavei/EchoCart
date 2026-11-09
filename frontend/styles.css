@@ -127,6 +127,20 @@ button.secondary { background: var(--bg); color: var(--text); }
 .setting input[type="range"] { flex: 1 1 10rem; accent-color: var(--accent); }
 .setting select { min-height: 2.75rem; padding: 0.3rem 0.5rem; border: 2px solid var(--border); border-radius: 0.5rem; background: var(--bg); }
 
+.setting input[type="number"], .pin-settings input {
+  min-height: 3rem;
+  padding: 0.5rem 0.75rem;
+  border: 2px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+}
+.pin-form { margin-top: 1rem; }
+.pin-settings fieldset { border: 2px solid var(--border); border-radius: 0.75rem; padding: 0.75rem 1rem 0.25rem; margin: 0 0 1rem; }
+.pin-settings legend { font-weight: 700; padding: 0 0.4rem; }
+.pin-settings .field { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.9rem; max-width: 24rem; }
+.pin-buttons { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 0.5rem; }
+[hidden] { display: none !important; }
+
 .log { padding-left: 1.25rem; }
 .log li { margin-bottom: 0.5rem; }
 .log .who { font-weight: 700; }

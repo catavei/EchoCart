@@ -49,6 +49,8 @@ EchoCart is designed around three things a blind shopper needs to trust a paymen
 | If the cart changes, or anything else is said, the yes no longer counts; a new read-back and a new yes are required | `ConfirmationGate.consume` checks the cart fingerprint; every non-read-back reply disarms it |
 | Refunds, unlinking PayPal, and raising or removing the spending limit each need their own read-back and yes. A yes given for one can't approve another | `ConfirmationGate` kinds `payment` / `refund` / `unlink` / `limit` |
 | An order over the spending limit is never offered for a yes, and the payment step checks the limit again | `dialog.Conversation._propose`, `_pay` |
+| Optional PIN: when set, a valid yes still needs a **typed** PIN (never spoken) for payments over a chosen amount, raising or removing the limit, and unlinking PayPal. Saying anything else cancels that step; the PIN alone never pays. Three wrong tries lock these for 10 minutes. Stored only as a salted scrypt hash | `pin.py`, `Store.check_pin`, `Conversation._confirmed` / `submit_pin`; the PIN has its own endpoint and never enters the conversation or logs |
+| If PayPal doesn't answer, EchoCart says it can't tell yet (not "nothing was charged"), and paying the same cart again reuses the same `PayPal-Request-Id`, so it can't charge twice | `PayPalClient._send`, `Conversation.unanswered_payment` |
 | LLM output that fails the schema, names an unknown product id, or goes over budget is never shown | `safety.validate_llm_output` |
 | Prices come from `catalog.json`, never from the LLM | `cart.price_cart` |
 | Every create, capture and refund is logged with a timestamp and order id | `data/payments.jsonl` (`paypal_client.PaymentLog`) |
@@ -145,6 +147,7 @@ All settings come from environment variables or `.env`.
 | "how much is coffee?", "what tea do you have?" | Prices and options. The cart doesn't change. |
 | "set my spending limit to 100 lei", "what's my limit?", "remove my spending limit" | EchoCart won't pay for an order above the limit. Lowering it is immediate; raising or removing it needs a yes. It can also be set in Settings. |
 | "link PayPal", "unlink my PayPal" | Starts the one-time account link, or deletes the saved account after a yes. |
+| "set a PIN" | Moves you to the PIN settings. For privacy the PIN is typed (4 to 8 digits), never spoken. Choose every payment or only payments over an amount. |
 | "help" | Lists these commands. |
 
 Keyboard: **Space** starts or stops listening, and **Esc** stops EchoCart talking. Every reply also appears in the page's live regions and in the conversation log.
@@ -163,6 +166,7 @@ The target is **WCAG 2.2 AA**.
 - **The PayPal window opens on a key press**, because browsers block popups that aren't triggered by the user. EchoCart moves focus to the button and says "press Enter". The page you return to from PayPal announces the result and closes itself.
 - **Layout and contrast:** visible 4px focus outlines, colour tokens checked for at least 4.5:1 text contrast in light and dark mode, single-column layout with no fixed widths (works at 200% zoom and 375px wide), and reduced motion respected.
 - **Typing is always available** for browsers without speech recognition, noisy rooms, or shoppers who prefer typing.
+- **A PIN you type, not say:** speaking a PIN aloud lets anyone nearby hear it. When the PIN is needed, EchoCart says "Type your PIN and press Enter" and moves focus to a masked numeric field (number keypad on phones). The digits never appear in the conversation log, and "One moment." is spoken if PayPal is slow.
 
 ### Testing log
 
@@ -173,6 +177,7 @@ Be honest here: only list what was actually tested.
 | 2026-11-06 | Chromium (automated), offline parser, PayPal not configured | Page load, focus on Talk, live-region text, typed purchase / edit / yes, 375px width, light and dark mode, no horizontal scroll, no console errors | Pass |
 | 2026-11-09 | Real PayPal sandbox (Vault enabled), `tests/manual/vault_spike.py` | Buyer approves the setup token once → payment token → order with `vault_id` returned COMPLETED (no approval page, no separate capture) → full refund COMPLETED | Pass |
 | 2026-11-09 | Full app against the real PayPal sandbox, offline parser, typed input | Link PayPal (in Chrome; a browser that blocks pop-ups gets a spoken "allow pop-ups" message), the demo script's purchase with the edit and the refused "yeah", payment with no PayPal page, order status, partial refund of one line (PayPal shows the capture as PARTIALLY_REFUNDED), order history. The audit log matches PayPal | Pass |
+| 2026-11-09 | Chromium (built-in browser), real keyboard input | Set a PIN in Settings; raise the limit, then yes, then the PIN field gets focus; a wrong PIN shows "2 tries left" with focus kept; the right PIN applies the change and focus returns to Talk; no PIN digits in the conversation log; PIN settings at 375px with no horizontal scroll | Pass |
 | _to do_ | NVDA 2026.x + Chrome, Windows 11 | Full voice purchase with the screen off, edit, refund, PayPal link window, "Let my screen reader speak" | |
 | _to do_ | VoiceOver + Safari, macOS | Typing fallback (Safari has no Web Speech recognition), live regions, PayPal window | |
 | _to do_ | VoiceOver + Chrome, macOS | Full voice purchase, Space / Esc, earcons | |
@@ -186,7 +191,7 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 75 tests:
+The suite has 100 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
 - **Safety rules** (`test_safety.py`): no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
@@ -194,6 +199,8 @@ The suite has 75 tests:
 - **PayPal against a mocked API** (`test_paypal_mock.py`): the vault flow, the audit log, and the sandbox-only guard.
 - **Whole conversations** (`test_dialog.py`): link → buy → receipt → refund, plus the popup fallback, run through the HTTP API.
 - **The newer features** (`test_features.py`): spending limit (including that a limit yes can't pay), reorder, order status and history, partial refunds with exact remainders, unlink, and product questions.
+- **PayPal not answering** (`test_paypal_mock.py`, `test_dialog.py`): retries reuse the same request id, the reply never claims nothing was charged, and a second yes can't create a second order.
+- **The PIN** (`test_pin.py`): hashing, lockout and expiry, yes then PIN, the PIN alone never pays, anything said cancels the PIN step, the amount threshold, limit and unlink need it, refunds don't, changing it needs the current PIN, and the PIN never appears in replies or the store file.
 
 **Manual end-to-end check against the real sandbox:** run this once with your `.env` filled in. It links a sandbox buyer, pays 1.00 EUR with no approval page, and refunds it.
 
@@ -206,7 +213,7 @@ Last run on 2026-11-09: the vaulted order came back `COMPLETED` straight from cr
 ## Project layout
 
 ```
-backend/   app.py (API + PayPal return pages), dialog.py (conversation), safety.py, cart.py,
+backend/   app.py (API + PayPal return pages), dialog.py (conversation), safety.py, pin.py, cart.py,
            llm.py (Claude + offline parser), paypal_client.py, store.py, config.py,
            catalog.json (41 products), prompts/cart_system.md
 frontend/  index.html, app.js, styles.css, sounds/earcons.js
@@ -220,6 +227,7 @@ tests/     unit tests, fixtures/utterances.json, manual/vault_spike.py
 - **No fraud-prevention data yet.** PayPal recommends sending fraud-prevention ("risk") data with payments that use a saved account; EchoCart doesn't include PayPal's FraudNet script yet.
 - **Speech recognition depends on the browser.** Chrome sends audio to Google's speech service; Safari doesn't support recognition at all, so the typing box is used.
 - **The product names and brands in the catalogue are invented.**
+- **The first PIN can be set by anyone at the device**, as there's no account login in this single-shopper demo. Changing or removing it needs the current PIN. Passkeys (Windows Hello, Face ID) would be the stronger next step.
 
 ## Licence
 

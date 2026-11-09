@@ -14,6 +14,7 @@
 | Trusts the AI's numbers | The AI only picks products; every price, total and refund amount comes from the backend |
 | Any "ok" can trigger a purchase | Money moves only on "yes", "yes, pay" or "confirm", straight after the exact total is spoken, and each yes works once |
 | No guard against mistakes | A per-order spending limit the shopper sets by voice; raising it needs a yes |
+| Anyone in the room can say "yes" | An optional PIN, typed and never spoken, after the yes; 3 wrong tries lock payments |
 | Refunds mean calling support | "Refund just the batteries" gives a partial refund through PayPal Payments v2, spoken back first |
 | Accessibility added at the end | Designed with screen readers first: live regions, earcons and vibration, a "let my screen reader speak" mode, no timeouts |
 
@@ -37,6 +38,7 @@ Voice assistants can fill a cart, but most of them still hand you to a visual pa
 - **"How much is coffee?"** and **"what tea do you have?"** answer without touching the cart.
 - **"Set my spending limit to 100 lei"** stops EchoCart paying for any order above it. Lowering the limit takes effect at once; raising or removing it needs a yes.
 - **"Unlink my PayPal"** deletes the saved PayPal account through PayPal's Vault API, after a yes.
+- **An optional PIN** protects against someone else in the room saying "yes". After your yes, EchoCart asks you to *type* the PIN, because a spoken PIN can be overheard. You choose whether it's every payment or only those over an amount. It's also needed to raise the spending limit or unlink PayPal.
 - **"Repeat", "help" and "cancel"** work at every step, with no timeouts.
 
 You link your PayPal account **once**, in a popup that EchoCart talks you through. After that, checkout is entirely by voice.
@@ -76,8 +78,10 @@ The safety rules are enforced in code, not left to the AI's instructions:
 - **Refunds, unlinking PayPal, and raising or removing the spending limit** each have their own read-back and yes. A yes given for one can't authorise another.
 - **The spending limit is checked twice:** an over-limit cart is never offered for a yes, and the payment step checks again.
 - **A second order can't be created** while one is waiting for approval in the fallback popup.
+- **The optional PIN is a second step, never a shortcut.** It only completes a valid yes. Saying anything else cancels it, and three wrong tries lock payments and account changes for 10 minutes. It's stored as a salted scrypt hash and goes to its own endpoint, so it never reaches the conversation, the speech engine or the logs.
+- **When PayPal doesn't answer**, EchoCart doesn't pretend nothing happened. It says it can't tell yet, and paying the same cart again reuses the same PayPal request id, so PayPal returns the first order instead of charging twice. We found this case in a real sandbox run, where one create took over 30 seconds.
 
-These rules are covered by 75 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
+These rules are covered by 100 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
 
 ## Accessibility choices
 
@@ -122,6 +126,7 @@ These rules are covered by 75 automated tests, including 30 recorded-style utter
 - **Real shop catalogues** instead of a demo catalogue, and grocery delivery slots.
 - **Fraud-prevention data and production vetting** for saved PayPal accounts.
 - **Real delivery tracking** through PayPal's shipment tracking API, replacing the delivery estimate.
+- **Passkeys** (Windows Hello, Face ID, fingerprint) as an alternative to the PIN: nothing to remember, nothing to overhear.
 - **A trusted-contact option:** an optional second confirmation by a family member above a set amount.
 - **A phone-call channel**, so shoppers can use it without a browser at all.
 

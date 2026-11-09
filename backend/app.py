@@ -4,6 +4,7 @@ from __future__ import annotations
 import html
 import logging
 from contextlib import asynccontextmanager
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -32,6 +33,20 @@ class SessionRef(BaseModel):
 
 class Utterance(SessionRef):
     text: str = Field(max_length=500)
+
+
+class PinEntry(SessionRef):
+    pin: str = Field(max_length=8)
+
+
+class PinSettings(SessionRef):
+    new_pin: str | None = Field(default=None, max_length=8)
+    current_pin: str | None = Field(default=None, max_length=8)
+    over_ron: Decimal = Field(default=Decimal("0"), ge=0, le=100000)
+
+
+class PinRemoval(SessionRef):
+    current_pin: str = Field(max_length=8)
 
 
 def build_deps() -> Deps:
@@ -98,6 +113,19 @@ def create_app(deps: Deps | None = None) -> FastAPI:
     async def utterance(body: Utterance):
         reply = await session(body.session_id).handle(body.text)
         return reply.to_json()
+
+    # The PIN never goes through /api/utterance, so it is never logged, parsed or spoken.
+    @app.post("/api/pin")
+    async def pin_entry(body: PinEntry):
+        return (await session(body.session_id).submit_pin(body.pin)).to_json()
+
+    @app.post("/api/pin/set")
+    def pin_set(body: PinSettings):
+        return session(body.session_id).set_pin(body.new_pin, body.current_pin, body.over_ron).to_json()
+
+    @app.post("/api/pin/remove")
+    def pin_remove(body: PinRemoval):
+        return session(body.session_id).remove_pin(body.current_pin).to_json()
 
     @app.post("/api/link/start")
     async def link_start(body: SessionRef):

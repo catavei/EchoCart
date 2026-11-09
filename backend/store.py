@@ -6,10 +6,15 @@ DATA_DIR is enough and keeps the app dependency-free.
 from __future__ import annotations
 
 import json
+import math
 import threading
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
+
+from .pin import LOCK_MINUTES, MAX_TRIES, hash_pin, verify_pin
 
 
 @dataclass
@@ -55,6 +60,13 @@ class StoreData:
     customer_id: str | None = None
     spending_limit_ron: str | None = None
     orders: list[OrderRecord] = field(default_factory=list)
+    pin_hash: str | None = None            # salted scrypt hash, never the PIN itself
+    pin_over_ron: str = "0"                # ask for the PIN on payments above this ("0" = every payment)
+    pin_failures: int = 0
+    pin_locked_until: str | None = None    # ISO timestamp (UTC)
+
+
+PinCheck = Literal["ok", "wrong", "locked"]
 
 
 def _order_from_json(raw: dict) -> OrderRecord:
@@ -75,8 +87,12 @@ class Store:
         if not self.path.is_file():
             return StoreData()
         raw = json.loads(self.path.read_text(encoding="utf-8"))
-        return StoreData(raw.get("vault_id"), raw.get("customer_id"), raw.get("spending_limit_ron"),
-                         [_order_from_json(o) for o in raw.get("orders", [])])
+        return StoreData(
+            vault_id=raw.get("vault_id"), customer_id=raw.get("customer_id"),
+            spending_limit_ron=raw.get("spending_limit_ron"),
+            orders=[_order_from_json(o) for o in raw.get("orders", [])],
+            pin_hash=raw.get("pin_hash"), pin_over_ron=raw.get("pin_over_ron") or "0",
+            pin_failures=int(raw.get("pin_failures") or 0), pin_locked_until=raw.get("pin_locked_until"))
 
     def save(self) -> None:
         with self._lock:
@@ -106,6 +122,66 @@ class Store:
     def set_spending_limit(self, limit: Decimal | None) -> None:
         self.data.spending_limit_ron = str(limit) if limit is not None else None
         self.save()
+
+    # ---- payment PIN
+    @property
+    def has_pin(self) -> bool:
+        return bool(self.data.pin_hash)
+
+    @property
+    def pin_over_ron(self) -> Decimal:
+        return Decimal(self.data.pin_over_ron or "0")
+
+    @property
+    def pin_tries_left(self) -> int:
+        return MAX_TRIES - self.data.pin_failures
+
+    def set_pin(self, pin: str, over_ron: Decimal) -> None:
+        self.data.pin_hash = hash_pin(pin)
+        self.data.pin_over_ron = str(over_ron)
+        self.data.pin_failures, self.data.pin_locked_until = 0, None
+        self.save()
+
+    def set_pin_over(self, over_ron: Decimal) -> None:
+        self.data.pin_over_ron = str(over_ron)
+        self.save()
+
+    def pin_lock_minutes_left(self, now: datetime) -> int:
+        until = self.data.pin_locked_until
+        if not until:
+            return 0
+        return max(1, math.ceil((datetime.fromisoformat(until) - now).total_seconds() / 60))
+
+    def clear_pin(self) -> None:
+        self.data.pin_hash = None
+        self.data.pin_over_ron = "0"
+        self.data.pin_failures, self.data.pin_locked_until = 0, None
+        self.save()
+
+    def pin_locked(self, now: datetime) -> bool:
+        until = self.data.pin_locked_until
+        if until and now < datetime.fromisoformat(until):
+            return True
+        if until:  # lock expired: start afresh
+            self.data.pin_failures, self.data.pin_locked_until = 0, None
+            self.save()
+        return False
+
+    def check_pin(self, pin: str, now: datetime) -> PinCheck:
+        if self.pin_locked(now):
+            return "locked"
+        if self.data.pin_hash and verify_pin(pin, self.data.pin_hash):
+            if self.data.pin_failures:
+                self.data.pin_failures = 0
+                self.save()
+            return "ok"
+        self.data.pin_failures += 1
+        if self.data.pin_failures >= MAX_TRIES:
+            self.data.pin_locked_until = (now + timedelta(minutes=LOCK_MINUTES)).isoformat()
+            self.save()
+            return "locked"
+        self.save()
+        return "wrong"
 
     # ---- orders
     def add_order(self, order: OrderRecord) -> None:

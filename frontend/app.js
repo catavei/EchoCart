@@ -92,20 +92,49 @@
     if (document.activeElement !== limitInput) limitInput.value = limit ? String(Math.round(Number(limit))) : "";
   }
 
+  // ---- PIN ---------------------------------------------------------------
+  const pinForm = $("pin-form"), pinInput = $("pin");
+  const pinSettings = $("pin-settings"), pinStatus = $("pin-status"), pinCurrentRow = $("pin-current-row");
+  const pinCurrent = $("pin-current"), pinNew = $("pin-new"), pinNewLabel = $("pin-new-label");
+  const pinOver = $("pin-over"), pinRemove = $("pin-remove");
+  const PIN_RE = /^[0-9]{4,8}$/;
+
+  function showPinSettings(reply) {
+    if (!("pin_set" in reply)) return;
+    const over = reply.pin_over_ron ? Math.round(Number(reply.pin_over_ron)) : 0;
+    pinStatus.textContent = !reply.pin_set ? "No PIN set. Payments need only your spoken yes."
+      : over === 0 ? "PIN on. EchoCart asks for it after your yes on every payment."
+      : `PIN on. EchoCart asks for it after your yes on payments over ${over} lei.`;
+    pinCurrentRow.hidden = !reply.pin_set;
+    pinRemove.hidden = !reply.pin_set;
+    pinNewLabel.textContent = reply.pin_set ? "New PIN, 4 to 8 digits (leave empty to keep your PIN)" : "New PIN, 4 to 8 digits";
+    if (reply.pin_set && document.activeElement !== pinOver) pinOver.value = String(over);
+  }
+
   function handleReply(reply) {
     lastReply = reply;
     renderCart(reply.cart);
     if ("spending_limit_ron" in reply) showLimit(reply.spending_limit_ron);
+    showPinSettings(reply);
     addLog("EchoCart", reply.speech);
     announce(reply.speech, reply.priority);
     if (reply.earcon && window.Earcons) Earcons[reply.earcon]();
     speak(reply.speech);
 
-    linkBtn.hidden = !(reply.action && reply.action.type === "link");
-    approveUrl = reply.action && reply.action.type === "approve" ? reply.action.url : null;
+    const action = reply.action && reply.action.type;
+    const pinHadFocus = pinForm.contains(document.activeElement);
+    linkBtn.hidden = action !== "link";
+    approveUrl = action === "approve" ? reply.action.url : null;
     approveBtn.hidden = !approveUrl;
+    pinForm.hidden = action !== "pin";
     if (!linkBtn.hidden) linkBtn.focus();
     else if (!approveBtn.hidden) approveBtn.focus();
+    else if (!pinForm.hidden) { pinInput.value = ""; pinInput.focus(); }
+    else if (action === "pin_settings") {
+      const first = pinCurrentRow.hidden ? pinNew : pinCurrent;
+      first.focus();
+      first.scrollIntoView({ block: "center" });
+    } else if (pinHadFocus) (talkBtn.disabled ? typed : talkBtn).focus();
   }
 
   // ---- talking to the backend -----------------------------------------
@@ -145,6 +174,7 @@
     // Browsers block speech before the first key press, so the welcome is shown and announced only.
     renderCart(reply.cart);
     showLimit(reply.spending_limit_ron);
+    showPinSettings(reply);
     addLog("EchoCart", reply.speech);
     announce(reply.speech, "polite");
     lastReply = reply;
@@ -266,6 +296,57 @@
     send(`set my spending limit to ${value} lei`);
   });
   $("limit-remove").addEventListener("click", () => send("remove my spending limit"));
+
+  async function postReply(path, body, logText) {
+    if (busy) return;
+    busy = true;
+    if (logText) addLog("You", logText);
+    try {
+      handleReply(await post(path, { session_id: sessionId, ...body }));
+    } catch (e) {
+      handleReply({ speech: "Something went wrong talking to EchoCart. Please try again.", priority: "assertive", earcon: "error", cart: lastReply && lastReply.cart });
+    } finally {
+      busy = false;
+    }
+  }
+
+  // The PIN goes to its own endpoint: never into speech recognition, the conversation or the log.
+  pinForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const pin = pinInput.value;
+    pinInput.value = "";
+    if (!PIN_RE.test(pin)) {
+      announce("A PIN is 4 to 8 digits. Type it again.", "assertive");
+      speak("A PIN is 4 to 8 digits. Type it again.");
+      pinInput.focus();
+      return;
+    }
+    postReply("/api/pin", { pin }, "(PIN typed)");
+  });
+
+  pinSettings.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const newPin = pinNew.value, current = pinCurrent.value;
+    pinNew.value = pinCurrent.value = "";
+    const over = Math.max(0, Math.round(Number(pinOver.value) || 0));
+    if (newPin && !PIN_RE.test(newPin)) {
+      handleReply({ speech: "A PIN must be 4 to 8 digits. Nothing was changed.", priority: "assertive", earcon: "error", cart: lastReply && lastReply.cart });
+      pinNew.focus();
+      return;
+    }
+    postReply("/api/pin/set", { new_pin: newPin || null, current_pin: current || null, over_ron: String(over) });
+  });
+
+  pinRemove.addEventListener("click", () => {
+    const current = pinCurrent.value;
+    pinCurrent.value = "";
+    if (!current) {
+      handleReply({ speech: "Type your current PIN first, then press Remove PIN.", priority: "assertive", cart: lastReply && lastReply.cart });
+      pinCurrent.focus();
+      return;
+    }
+    postReply("/api/pin/remove", { current_pin: current });
+  });
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();

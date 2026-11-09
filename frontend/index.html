@@ -29,6 +29,17 @@
         <button id="link-paypal" class="secondary" type="button" hidden>Link my PayPal account (one time)</button>
         <button id="open-approval" class="secondary" type="button" hidden>Open PayPal to approve the payment</button>
       </div>
+
+      <!-- Shown only after a spoken yes that needs the PIN. Typed, never spoken or logged. -->
+      <form id="pin-form" class="type-form pin-form" hidden>
+        <label for="pin">Your PIN</label>
+        <div class="type-row">
+          <input id="pin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8"
+                 autocomplete="off" aria-describedby="pin-help">
+          <button type="submit">Confirm</button>
+        </div>
+        <p id="pin-help" class="hint">4 to 8 digits. EchoCart never reads your PIN aloud.</p>
+      </form>
     </section>
 
     <section aria-labelledby="type-heading">
@@ -64,6 +75,29 @@
         <button type="submit">Set limit</button>
         <button id="limit-remove" type="button" class="secondary">Remove limit</button>
         <p id="limit-help" class="hint">EchoCart won't pay for an order above this. Lowering it takes effect at once; raising or removing it asks you to confirm.</p>
+      </form>
+      <form id="pin-settings" class="pin-settings">
+        <fieldset>
+          <legend>PIN for payments</legend>
+          <p id="pin-status" class="hint">No PIN set. Payments need only your spoken yes.</p>
+          <div id="pin-current-row" class="field" hidden>
+            <label for="pin-current">Current PIN</label>
+            <input id="pin-current" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off">
+          </div>
+          <div class="field">
+            <label id="pin-new-label" for="pin-new">New PIN, 4 to 8 digits</label>
+            <input id="pin-new" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="pin-over">Ask for it on payments over this many lei (0 means every payment)</label>
+            <input id="pin-over" type="number" inputmode="numeric" min="0" step="1" value="0" autocomplete="off">
+          </div>
+          <div class="pin-buttons">
+            <button type="submit">Save PIN</button>
+            <button id="pin-remove" type="button" class="secondary" hidden>Remove PIN</button>
+          </div>
+          <p class="hint">When a PIN is set, EchoCart also asks for it before raising or removing your spending limit and before unlinking PayPal. Three wrong tries lock payments for 10 minutes.</p>
+        </fieldset>
       </form>
       <div class="setting">
         <label for="lang">Language I speak in</label>

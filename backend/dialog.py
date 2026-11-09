@@ -20,7 +20,7 @@ import logging
 import re
 import uuid
 from dataclasses import asdict, dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 from typing import Callable, Literal
 
@@ -30,6 +30,7 @@ from .llm import CartParser, LLMError, OfflineCartParser
 from .paypal_client import PayPalClient, PayPalError, PayPalUnreachable, _link, first_capture_id
 from .safety import (ConfirmationGate, ConfirmKind, Rejected, is_confirmation, normalize_utterance,
                      refund_fingerprint, validate_llm_output)
+from .pin import LOCK_MINUTES, valid_pin
 from .store import OrderLine, OrderRecord, Store
 
 log = logging.getLogger("echocart.dialog")
@@ -40,8 +41,14 @@ HELP = (
     "remove an item, make it three, or cheaper option. "
     "You can also ask how much something costs, say same as last time, ask where's my order, "
     "refund my last order or just one item from it, or set a spending limit. "
-    "Say repeat to hear the last thing again, read my cart, or cancel. Press Escape to stop me talking."
+    "Say repeat to hear the last thing again, read my cart, or cancel. Press Escape to stop me talking. "
+    "To protect payments with a PIN, use the PIN settings: a PIN is typed, never spoken."
 )
+PIN_PROMPTS = {
+    "payment": "Type your PIN and press Enter to pay. Or say cancel.",
+    "limit": "Type your PIN and press Enter to change your spending limit. Or say no.",
+    "unlink": "Type your PIN and press Enter to unlink PayPal. Or say no.",
+}
 WELCOME = "Welcome to EchoCart. Press the talk button or the Space bar, then say what you'd like to buy. Say help at any time."
 NOT_LINKED_HINT = " Before your first payment you'll link your PayPal account once."
 
@@ -63,6 +70,8 @@ _HISTORY = re.compile(r"\bwhat did i (order|buy)\b|\b(my|order) history\b|\bmy (
 _LIMIT_ASK = re.compile(r"\bwhat s my (spending )?limit\b|\bwhat is my (spending )?limit\b|\bdo i have a (spending )?limit\b")
 _LIMIT_OFF = re.compile(r"\b(remove|turn off|clear|delete|cancel|no more) (my |the |a )?(spending )?limit\b")
 _LIMIT_SET = re.compile(rf"\b(?:spending )?limit\b.*?\b{_N}\b|\blimit (?:me|each order|orders) to {_N}\b")
+_PIN_CMD = re.compile(r"\b(set|change|add|remove|create|turn on|turn off|use|need) (up )?(a |my |the )?"
+                      r"(pin|pin code|pin number|passcode)\b")
 _INFO = re.compile(r"^(how much (is|are|does|do|for)|what s the price|what is the price|price of|do you (have|sell)|"
                    r"what (kind|kinds|types|sort|sorts) of|what .+ do you (have|sell)|tell me about|is there|are there|"
                    r"what .+ are there)\b")
@@ -81,6 +90,8 @@ class Reply:
     linked: bool = False
     spending_limit_ron: str | None = None
     receipt: dict | None = None
+    pin_set: bool = False
+    pin_over_ron: str | None = None    # payments above this ask for the PIN ("0" = every payment)
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -96,6 +107,7 @@ class Deps:
     base_url: str
     today: Callable[[], date] = date.today
     matcher: OfflineCartParser | None = None
+    now: Callable[[], datetime] = lambda: datetime.now(timezone.utc)
 
     def __post_init__(self):
         if self.matcher is None:
@@ -142,6 +154,8 @@ class Conversation:
     # (cart fingerprint, PayPal-Request-Id) of a payment PayPal never answered: paying
     # the same cart again reuses the id, so PayPal returns that order instead of a new one.
     unanswered_payment: tuple[str, str] | None = None
+    # A yes that still needs the typed PIN: (kind, fingerprint of what the yes was for).
+    pending_pin: tuple[ConfirmKind, str] | None = None
     vault_unavailable: bool = False
     events: list[Reply] = field(default_factory=list)
 
@@ -158,9 +172,11 @@ class Conversation:
             self.gate.disarm()
         self.last_arm = arm
         limit = self.store.spending_limit
+        has_pin = self.store.has_pin
         reply = Reply(speech=speech, cart=self.cart.to_json() if self.cart else None,
                       awaiting=arm[0] if arm else None, linked=self.store.linked,
-                      spending_limit_ron=str(limit) if limit is not None else None, **kw)
+                      spending_limit_ron=str(limit) if limit is not None else None,
+                      pin_set=has_pin, pin_over_ron=str(self.store.pin_over_ron) if has_pin else None, **kw)
         self.last_reply = reply
         return reply
 
@@ -198,18 +214,23 @@ class Conversation:
         if not norm:
             return self._say("I didn't hear anything. Press the talk button and try again.")
         if _REPEAT.match(norm):
-            return self._repeat()
+            return self._repeat()  # a pending PIN step stays pending
+        if self.pending_pin:
+            # Anything said while EchoCart waits for the PIN cancels that step.
+            kind, self.pending_pin = self.pending_pin[0], None
+            if _NO.match(norm) or _CANCEL.match(norm):
+                return self._decline(kind)
 
         armed = self.gate.armed_for
         if armed == "payment" and self.cart and self.gate.consume(text, "payment", self.cart.fingerprint):
-            return await self._pay()
+            return await self._confirmed("payment", self.cart.fingerprint)
         if armed == "refund" and self.refund_plan and self.gate.consume(
                 text, "refund", self.refund_plan.fingerprint):
-            return await self._refund()
+            return await self._refund()  # money goes back to the shopper: no PIN
         if armed == "unlink" and self.gate.consume(text, "unlink", self._unlink_fp()):
-            return await self._unlink()
+            return await self._confirmed("unlink", self._unlink_fp())
         if armed == "limit" and self.gate.consume(text, "limit", self._limit_fp(self.pending_limit)):
-            return self._apply_limit(self.pending_limit)
+            return await self._confirmed("limit", self._limit_fp(self.pending_limit))
         # From here on the gate is disarmed: whatever was said, it was not a valid yes.
 
         if armed and _NO.match(norm):
@@ -228,6 +249,10 @@ class Conversation:
             return self._say("Cart emptied. What would you like instead?")
         if _READ_CART.search(norm):
             return self._propose() if self.cart else self._say("Your cart is empty.")
+        if _PIN_CMD.search(norm):
+            return self._say("For privacy, a PIN is typed, never spoken. I've moved you to the PIN settings. "
+                             "Type 4 to 8 digits there and choose when I should ask for it.",
+                             action={"type": "pin_settings"})
         if _UNLINK.search(norm):
             return self._offer_unlink()
         if _LINK.search(norm):
@@ -273,6 +298,110 @@ class Conversation:
         if armed == "unlink":
             return self._offer_unlink(prefix)
         return self._request_limit(self.pending_limit, prefix)
+
+    # ---- PIN: a typed second step after the spoken yes -------------------
+    def _needs_pin(self, kind: ConfirmKind) -> bool:
+        if not self.store.has_pin:
+            return False
+        if kind == "payment":
+            return self.cart is not None and self.cart.total_ron > self.store.pin_over_ron
+        return kind in ("limit", "unlink")  # limit only reaches here when raising or removing it
+
+    def _current_fp(self, kind: ConfirmKind) -> str | None:
+        if kind == "payment":
+            return self.cart.fingerprint if self.cart else None
+        if kind == "unlink":
+            return self._unlink_fp()
+        if kind == "limit":
+            return self._limit_fp(self.pending_limit)
+        return None
+
+    async def _confirmed(self, kind: ConfirmKind, fingerprint: str) -> Reply:
+        """The spoken yes was valid. Ask for the PIN if this action needs one, else act."""
+        if self._needs_pin(kind):
+            if self.store.pin_locked(self.deps.now()):
+                return self._pin_locked()
+            self.pending_pin = (kind, fingerprint)
+            return self._say(PIN_PROMPTS[kind], priority="assertive", action={"type": "pin"})
+        return await self._act(kind)
+
+    async def _act(self, kind: ConfirmKind) -> Reply:
+        if kind == "payment":
+            return await self._pay()
+        if kind == "unlink":
+            return await self._unlink()
+        return self._apply_limit(self.pending_limit)
+
+    def _pin_locked(self) -> Reply:
+        minutes = self.store.pin_lock_minutes_left(self.deps.now())
+        return self._say(f"After too many wrong PINs, payments and account changes are locked for "
+                         f"{minutes} more minute{'s' if minutes != 1 else ''}. Nothing was charged or changed.",
+                         priority="assertive", earcon="error")
+
+    def _wrong_pin(self, tail: str) -> Reply:
+        left = self.store.pin_tries_left
+        return self._say(f"That PIN isn't right. {left} {'try' if left == 1 else 'tries'} left. {tail}",
+                         priority="assertive", earcon="error",
+                         action={"type": "pin"} if self.pending_pin else None)
+
+    async def submit_pin(self, pin: str) -> Reply:
+        pending, self.pending_pin = self.pending_pin, None
+        if not pending:
+            return self._say("There's nothing waiting for your PIN. Ask for what you'd like, say yes to the "
+                             "total, and then type your PIN.")
+        kind, fingerprint = pending
+        if fingerprint != self._current_fp(kind):  # defensive: anything said in between clears pending_pin
+            return self._say("That confirmation has expired. Nothing was charged or changed.", priority="assertive")
+        result = self.store.check_pin(pin, self.deps.now())
+        if result == "ok":
+            return await self._act(kind)
+        if result == "locked":
+            return self._say(f"Too many wrong PINs, so payments and account changes are locked for {LOCK_MINUTES} "
+                             "minutes. Nothing was charged or changed.", priority="assertive", earcon="error")
+        self.pending_pin = pending
+        return self._wrong_pin("Type your PIN again, or say cancel.")
+
+    def _check_current_pin(self, current: str | None) -> Reply | None:
+        """None when the current PIN is right; otherwise the reply to give."""
+        result = self.store.check_pin(current or "", self.deps.now())
+        if result == "ok":
+            return None
+        if result == "locked":
+            return self._pin_locked()
+        return self._wrong_pin("Nothing was changed.")
+
+    def set_pin(self, new_pin: str | None, current_pin: str | None, over_ron: Decimal) -> Reply:
+        had = self.store.has_pin
+        if over_ron < 0:
+            return self._say("The amount can't be negative. Nothing was changed.", priority="assertive",
+                             earcon="error")
+        if had:
+            refused = self._check_current_pin(current_pin)
+            if refused:
+                return refused
+        if had and not new_pin:  # keep the PIN, change when it's asked for
+            self.store.set_pin_over(over_ron)
+            speech = "PIN setting saved."
+        elif not valid_pin(new_pin or ""):
+            return self._say("A PIN must be 4 to 8 digits. Nothing was changed.", priority="assertive",
+                             earcon="error")
+        else:
+            self.store.set_pin(new_pin, over_ron)
+            speech = "PIN changed." if had else "PIN set."
+        when = "every payment" if over_ron == 0 else f"payments over {say_lei(over_ron)}"
+        return self._say(f"{speech} After your yes, I'll ask for it on {when}, and before raising your "
+                         "spending limit or unlinking PayPal.", priority="assertive", earcon="success")
+
+    def remove_pin(self, current_pin: str | None) -> Reply:
+        if not self.store.has_pin:
+            return self._say("You don't have a PIN set.")
+        refused = self._check_current_pin(current_pin)
+        if refused:
+            return refused
+        self.store.clear_pin()
+        self.pending_pin = None
+        return self._say("PIN removed. Payments now need only your spoken yes.", priority="assertive",
+                         earcon="success")
 
     # ---- understanding requests ----------------------------------------
     async def _understand(self, text: str) -> Reply:
