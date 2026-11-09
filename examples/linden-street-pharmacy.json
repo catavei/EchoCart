@@ -1,0 +1,62 @@
+{
+  "products": [
+    {
+      "id": 8801001, "title": "Ibuprofen 200 mg tablets", "handle": "ibuprofen-200", "vendor": "Linden Health",
+      "product_type": "Pain relief", "tags": ["ibuprofen", "painkiller", "headache"],
+      "body_html": "<p>For headaches, toothache and period pain.</p>", "published_at": "2026-10-01T09:00:00+02:00",
+      "variants": [
+        {"id": 4400101, "title": "16 tablets", "price": "2.49", "available": true, "sku": "LH-IBU-16"},
+        {"id": 4400102, "title": "32 tablets", "price": "3.99", "available": true, "sku": "LH-IBU-32"}
+      ],
+      "images": []
+    },
+    {
+      "id": 8801002, "title": "Paracetamol 500 mg tablets", "handle": "paracetamol-500", "vendor": "Linden Health",
+      "product_type": "Pain relief", "tags": ["paracetamol", "painkiller", "fever"],
+      "variants": [{"id": 4400201, "title": "16 tablets", "price": "1.89", "available": true}]
+    },
+    {
+      "id": 8801003, "title": "Throat lozenges", "handle": "throat-lozenges", "vendor": "Soothe",
+      "product_type": "Cold and flu", "tags": ["sore throat", "lozenges", "pastile"],
+      "variants": [
+        {"id": 4400301, "title": "Honey and lemon", "price": "3.29", "available": true},
+        {"id": 4400302, "title": "Blackcurrant", "price": "3.29", "available": false}
+      ]
+    },
+    {
+      "id": 8801004, "title": "Saline nasal spray", "handle": "saline-nasal-spray", "vendor": "Soothe",
+      "product_type": "Cold and flu", "tags": ["nose", "spray", "blocked nose"],
+      "variants": [{"id": 4400401, "title": "20 ml", "price": "4.49", "available": true}]
+    },
+    {
+      "id": 8801005, "title": "Digital thermometer", "handle": "digital-thermometer", "vendor": "Linden Health",
+      "product_type": "Health devices", "tags": ["thermometer", "fever", "temperature"],
+      "variants": [{"id": 4400501, "title": "Default Title", "price": "7.99", "available": true}]
+    },
+    {
+      "id": 8801006, "title": "Fabric plasters", "handle": "fabric-plasters", "vendor": "Linden Health",
+      "product_type": "First aid", "tags": ["plasters", "band aid", "cuts"],
+      "variants": [{"id": 4400601, "title": "40 pack", "price": "2.99", "available": true}]
+    },
+    {
+      "id": 8801007, "title": "Hand sanitiser gel", "handle": "hand-sanitiser", "vendor": "Clearwell",
+      "product_type": "Hygiene", "tags": ["hand gel", "sanitiser", "sanitizer"],
+      "variants": [{"id": 4400701, "title": "100 ml", "price": "1.99", "available": true}]
+    },
+    {
+      "id": 8801008, "title": "Vitamin D3 1000 IU tablets", "handle": "vitamin-d3", "vendor": "Clearwell",
+      "product_type": "Vitamins", "tags": ["vitamin d", "vitamins", "d3"],
+      "variants": [{"id": 4400801, "title": "60 tablets", "price": "5.49", "available": true}]
+    },
+    {
+      "id": 8801009, "title": "Sun cream SPF 50", "handle": "sun-cream-spf50", "vendor": "Clearwell",
+      "product_type": "Skin care", "tags": ["sun cream", "sunscreen", "spf", "delivery:2"],
+      "variants": [{"id": 4400901, "title": "200 ml", "price": "9.99", "available": true}]
+    },
+    {
+      "id": 8801010, "title": "Soft toothbrushes", "handle": "soft-toothbrush", "vendor": "Clearwell",
+      "product_type": "Hygiene", "tags": ["toothbrush", "teeth"],
+      "variants": [{"id": 4401001, "title": "2 pack", "price": "2.79", "available": true}]
+    }
+  ]
+}

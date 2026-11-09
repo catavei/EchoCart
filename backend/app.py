@@ -12,9 +12,9 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from .cart import Catalog
 from .config import ROOT, get_settings
 from .dialog import Conversation, Deps
+from .feed import load_catalog
 from .llm import make_parser
 from .paypal_client import PaymentLog, PayPalClient, PayPalError
 from .store import Store
@@ -51,7 +51,7 @@ class PinRemoval(SessionRef):
 
 def build_deps() -> Deps:
     settings = get_settings()  # raises LiveCredentialsRefused unless sandbox
-    catalog = Catalog.load()
+    catalog = load_catalog(settings.catalog_url)
     paypal = None
     if settings.paypal_client_id and settings.paypal_client_secret:
         paypal = PayPalClient(settings.paypal_client_id, settings.paypal_client_secret,

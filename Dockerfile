@@ -8,6 +8,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend ./backend
 COPY frontend ./frontend
+COPY examples ./examples
 
 ENV DATA_DIR=/app/data
 EXPOSE 8000

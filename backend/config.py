@@ -41,6 +41,7 @@ class Settings:
     anthropic_effort: str
     app_base_url: str
     data_dir: Path
+    catalog_url: str = ""   # merchant product feed (URL or file); empty = built-in catalogue
 
     def assert_sandbox(self) -> None:
         if self.paypal_api_base.rstrip("/") != SANDBOX_API_BASE:
@@ -63,6 +64,7 @@ def get_settings() -> Settings:
         anthropic_effort=env("ANTHROPIC_EFFORT", "low"),
         app_base_url=env("APP_BASE_URL", "http://localhost:8000").rstrip("/"),
         data_dir=Path(env("DATA_DIR", str(ROOT / "data"))),
+        catalog_url=env("CATALOG_URL", "").strip(),
     )
     settings.assert_sandbox()
     return settings

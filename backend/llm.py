@@ -124,7 +124,9 @@ _STOPWORDS = {"of", "the", "some", "and", "pack", "packs", "please", "i", "want"
 # Words shared by a whole category; they don't make two products "the same kind".
 _GENERIC_TERMS = {"batteries", "baterii", "alkaline", "alcaline", "battery", "baterie", "cheap",
                   "tablets", "bags", "mineral", "minerala", "apa", "water"}
-_QTY_RE = re.compile(r"\b(\d{1,2})\b(?!\s*(?:euros?|eur|v\b|ml|g\b|kg|l\b|litre|liter))")
+# A number followed by a unit or pack word ("32 tablets", "8 pack", "200 mg") names a product, not a quantity.
+_QTY_RE = re.compile(r"\b(\d{1,2})\b(?!\s*(?:euros?|eur|v\b|ml|mg\b|g\b|kg|l\b|litre|liter|iu\b|pack\b|"
+                     r"tablets?|capsules?|pieces?|rolls?|sachets?))")
 _DIACRITICS = str.maketrans("ăâîșşțţ", "aaisstt")
 
 
@@ -165,7 +167,7 @@ class OfflineCartParser:
         best, scored = 0, []
         for p in self.catalog:
             terms = self._terms[p.id]
-            score = sum(1 for t in tokens if t in terms)
+            score = sum(1 for t in tokens if t in terms or (t.endswith("s") and t[:-1] in terms))
             score += sum(2 for kw in p.keywords if " " in kw and _fold(kw) in phrase)
             if score:
                 scored.append((score, p))

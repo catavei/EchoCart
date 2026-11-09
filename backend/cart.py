@@ -22,7 +22,7 @@ CENT = Decimal("0.01")
 class Product(BaseModel):
     id: str
     name: str
-    name_ro: str
+    name_ro: str = ""   # Romanian name, if the catalogue has one
     brand: str
     pack_size: str
     price_eur: Decimal
@@ -33,7 +33,8 @@ class Product(BaseModel):
 
     @property
     def spoken_name(self) -> str:
-        return f"{self.brand} {self.name}, {self.pack_size}"
+        name = f"{self.brand} {self.name}" if self.brand else self.name
+        return f"{name}, {self.pack_size}" if self.pack_size else name
 
 
 class Catalog:
@@ -56,7 +57,8 @@ class Catalog:
     def for_prompt(self) -> str:
         """Compact catalogue for the LLM: id, names, brand, pack, price, stock."""
         rows = [
-            f"{p.id} | {p.brand} {p.name} ({p.name_ro}) | {p.pack_size} | {p.price_eur} euros | stock {p.stock}"
+            f"{p.id} | {p.brand} {p.name}{f' ({p.name_ro})' if p.name_ro else ''} | {p.pack_size or '-'} | "
+            f"{p.price_eur} euros | stock {p.stock}"
             for p in self
         ]
         return "\n".join(rows)

@@ -43,6 +43,8 @@ Voice assistants can fill a cart, but most of them still hand you to a visual pa
 
 You link your PayPal account **once**, in a popup that EchoCart talks you through. After that, checkout is entirely by voice.
 
+**For merchants:** EchoCart is the voice checkout a shop adds for its blind and low-vision customers. Point it at the shop's product feed (the Shopify-style `products.json`) and the shop's own PayPal app, and the same voice checkout sells that shop's products. The repo includes a sample pharmacy feed.
+
 ## How we built it
 
 **PayPal (sandbox):**
@@ -54,6 +56,10 @@ You link your PayPal account **once**, in a popup that EchoCart talks you throug
 - **Currency.** The shop prices in euros, the currency PayPal charges, so the spoken total is exactly what PayPal takes. There's no conversion step to explain or get wrong.
 - **Audit log.** Every create, capture and refund is logged with a timestamp and order id.
 - **Sandbox only.** The app refuses to start unless the API base URL is PayPal's sandbox.
+
+**Merchant catalogues:**
+- **`CATALOG_URL`** loads a merchant's product feed in the Shopify-style `products.json` shape, from a URL or a file. Each variant becomes a product; prices are read as euros, unavailable variants can't be bought, and a feed in another currency is refused.
+- **The safety rules don't change.** Prices still come only from the feed, and payments go to the merchant's own PayPal account.
 
 **AI (Claude):**
 - **What Claude does.** It turns the shopper's words into structured JSON through a JSON-schema response: an action (`propose_cart`, `edit_cart`, `clarify`, `refund_request`, ...), product ids and quantities, the stated budget, and a clarifying question if the request is ambiguous.
@@ -81,7 +87,7 @@ The safety rules are enforced in code, not left to the AI's instructions:
 - **The optional PIN is a second step, never a shortcut.** It only completes a valid yes. Saying anything else cancels it, and three wrong tries lock payments and account changes for 10 minutes. It's stored as a salted scrypt hash and goes to its own endpoint, so it never reaches the conversation, the speech engine or the logs.
 - **When PayPal doesn't answer**, EchoCart doesn't pretend nothing happened. It says it can't tell yet, and paying the same cart again reuses the same PayPal request id, so PayPal returns the first order instead of charging twice. We found this case in a real sandbox run, where one create took over 30 seconds.
 
-These rules are covered by 99 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
+These rules are covered by 115 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
 
 ## Accessibility choices
 
@@ -123,7 +129,8 @@ These rules are covered by 99 automated tests, including 30 recorded-style utter
 ## What's next
 
 - **Testing with blind and low-vision shoppers**, and changing the wording and pacing based on what they tell us.
-- **Real shop catalogues** instead of a demo catalogue, and grocery delivery slots.
+- **More shop platforms:** WooCommerce and Google Merchant Center feeds next to Shopify's, live stock updates instead of reading the feed once, and delivery slots.
+- **Marketplaces without PayPal checkout, such as Amazon,** would need a browser extension that reads the page and only presses the real checkout button after a spoken yes. We left that out of this demo because it can't run on the sandbox.
 - **Fraud-prevention data and production vetting** for saved PayPal accounts.
 - **Real delivery tracking** through PayPal's shipment tracking API, replacing the delivery estimate.
 - **Passkeys** (Windows Hello, Face ID, fingerprint) as an alternative to the PIN: nothing to remember, nothing to overhear.

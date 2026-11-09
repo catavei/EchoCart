@@ -127,7 +127,31 @@ All settings come from environment variables or `.env`.
 | `ANTHROPIC_MODEL` | `claude-opus-5-5` | Model name. |
 | `ANTHROPIC_EFFORT` | `low` | Lower effort means faster replies, which matters in a spoken conversation. |
 | `APP_BASE_URL` | `http://localhost:8000` | Where PayPal sends the popup back to. |
+| `CATALOG_URL` | empty | A merchant's product feed, as a URL or a file path. Empty means the demo catalogue. See [Use a merchant's own catalogue](#use-a-merchants-own-catalogue). |
 | `DATA_DIR` | `./data` | Holds `store.json` (linked account and orders) and `payments.jsonl` (audit log). |
+
+## Use a merchant's own catalogue
+
+EchoCart is meant to be the voice checkout a shop adds for its blind and low-vision customers. By default it sells from its demo catalogue (`backend/catalog.json`). To sell a merchant's products instead, point `CATALOG_URL` at the shop's product feed, and use that merchant's own PayPal sandbox app credentials:
+
+```bash
+CATALOG_URL=https://shop.example/products.json
+# or a file, relative to the repository:
+CATALOG_URL=examples/linden-street-pharmacy.json
+```
+
+The feed is the Shopify-style `products.json` shape (Shopify storefronts serve it at `/products.json`). [`examples/linden-street-pharmacy.json`](examples/linden-street-pharmacy.json) is a small sample pharmacy. With it, *"two packs of ibuprofen"* is read back as *"Linden Health Ibuprofen 200 mg tablets, 16 tablets, quantity two. Total 4 euros 98 cents."*
+
+| Feed field | Becomes |
+|---|---|
+| each entry in `variants` | one product the shopper can buy |
+| `title`, `vendor` | the spoken name and brand |
+| variant `title` | the pack size ("16 tablets"); Shopify's "Default Title" is left out |
+| variant `price` | the price, read as euros. A feed with a `currency` other than EUR is refused, and variants without a valid price are skipped |
+| `inventory_quantity`, else `available` | stock (an unavailable variant can't be bought) |
+| `product_type`, `tags` | the category and the words the shopper may use; a `delivery:2` tag sets the delivery time in days (default 1) |
+
+Everything else in the feed (descriptions, images, dates) is ignored. The feed is read once at startup and holds up to 500 products, because the whole catalogue goes into Claude's prompt. The safety rules don't change: prices still come only from the feed, never from the model, and the voice checkout, PIN, limit and refunds work the same way. Payments go to the PayPal account whose credentials the app runs with, so each merchant runs EchoCart with their own PayPal app.
 
 ## What you can say
 
@@ -190,7 +214,7 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 99 tests:
+The suite has 115 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
 - **Safety rules** (`test_safety.py`): no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
@@ -199,6 +223,7 @@ The suite has 99 tests:
 - **Whole conversations** (`test_dialog.py`): link → buy → receipt → refund, plus the popup fallback, run through the HTTP API.
 - **The newer features** (`test_features.py`): spending limit (including that a limit yes can't pay), reorder, order status and history, partial refunds with exact remainders, unlink, and product questions.
 - **PayPal not answering** (`test_paypal_mock.py`, `test_dialog.py`): retries reuse the same request id, the reply never claims nothing was charged, and a second yes can't create a second order.
+- **Merchant product feeds** (`test_feed.py`): the Shopify-style feed becomes products with the right names, prices, stock and delivery; unusable feeds are refused; loading by URL or file; and a whole voice purchase from the sample pharmacy feed.
 - **The PIN** (`test_pin.py`): hashing, lockout and expiry, yes then PIN, the PIN alone never pays, anything said cancels the PIN step, the amount threshold, limit and unlink need it, refunds don't, changing it needs the current PIN, and the PIN never appears in replies or the store file.
 
 **Manual end-to-end check against the real sandbox:** run this once with your `.env` filled in. It links a sandbox buyer, pays 1.00 EUR with no approval page, and refunds it.
@@ -213,9 +238,10 @@ Last run on 2026-11-09: the vaulted order came back `COMPLETED` straight from cr
 
 ```
 backend/   app.py (API + PayPal return pages), dialog.py (conversation), safety.py, pin.py, cart.py,
-           llm.py (Claude + offline parser), paypal_client.py, store.py, config.py,
+           llm.py (Claude + offline parser), paypal_client.py, store.py, config.py, feed.py,
            catalog.json (41 products), prompts/cart_system.md
 frontend/  index.html, app.js, styles.css, sounds/earcons.js
+examples/  linden-street-pharmacy.json (a sample merchant product feed)
 tests/     unit tests, fixtures/utterances.json, manual/vault_spike.py
 ```
 
@@ -224,7 +250,8 @@ tests/     unit tests, fixtures/utterances.json, manual/vault_spike.py
 - **Single shopper per server.** Conversations are kept in memory, and the linked account and order history sit in one JSON file. That suits a demo, not production.
 - **No fraud-prevention data yet.** PayPal recommends sending fraud-prevention ("risk") data with payments that use a saved account; EchoCart doesn't include PayPal's FraudNet script yet.
 - **Speech recognition depends on the browser.** Chrome sends audio to Google's speech service; Safari doesn't support recognition at all, so the typing box is used.
-- **The product names and brands in the catalogue are invented.**
+- **The product names and brands in the catalogue are invented**, and so is the sample pharmacy feed.
+- **One merchant per server.** EchoCart pays the PayPal account it runs with, so each shop runs its own instance. Shops that don't take PayPal, such as Amazon, aren't supported.
 - **The first PIN can be set by anyone at the device**, as there's no account login in this single-shopper demo. Changing or removing it needs the current PIN. Passkeys (Windows Hello, Face ID) would be the stronger next step.
 
 ## Licence
