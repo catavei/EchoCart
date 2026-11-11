@@ -110,7 +110,7 @@ python -m venv .venv
 
 ### Try it without installing anything (for judges)
 
-**Hosted demo: <https://ECHOCART-URL.onrender.com>** (PayPal sandbox; no real money moves). Open it in Chrome or Edge.
+**Hosted demo: <https://echocart-46wx.onrender.com>** (PayPal sandbox; no real money moves). Open it in Chrome or Edge.
 
 To pay, link PayPal with this sandbox **buyer** account when the PayPal window asks you to log in:
 

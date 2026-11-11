@@ -145,5 +145,6 @@ These rules are covered by 130 automated tests, including 30 recorded-style utte
 ## Try it
 
 - **Repo:** https://github.com/catavei/EchoCart (MIT licence)
+- **Hosted demo:** https://echocart-46wx.onrender.com (PayPal sandbox; the first visit can take a minute while the server wakes up)
 - **Video:** **[EDIT: YouTube URL]**
 - **Setup:** see the README. A PayPal sandbox app plus `docker compose up` takes about 5 minutes. All payments are sandbox; no real money moves.
