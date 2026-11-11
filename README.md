@@ -181,6 +181,7 @@ A shop adds EchoCart to its own pages with a script tag, the way it would add Pa
   const voice = EchoCart.mount(document.getElementById("voice"), {
     onCart(cart) { /* show the basket: lines, total, delivery date; null when empty */ },
     onOrder(receipt) { /* show the order: PayPal order id, total, delivery date */ },
+    onRefund(refund) { /* after a refund: order id, amount refunded, refunded so far */ },
   });
   // optional: Add to basket buttons fill the same cart, by the variant id in the shop's feed
   voice.add("4400101");
@@ -203,7 +204,7 @@ CATALOG_URL=http://localhost:8012/linden-street-pharmacy.json SHOP_ORIGINS=http:
 # then open http://localhost:8012/shop/
 ```
 
-**Shop by voice** opens EchoCart in a panel beside the products, with the keyboard focus on its Talk button. As you speak, the shop's own basket changes (new and changed lines and the total are highlighted), and an order confirmation appears once PayPal has the money. The shop's page links to `http://localhost:8011/embed.js`; for another address, change that line.
+**Shop by voice** opens EchoCart in a panel beside the products, with the keyboard focus on its Talk button. As you speak, the shop's own basket changes (new and changed lines and the total are highlighted), an order confirmation appears once PayPal has the money, and a refund shows on that order. The shop's page links to `http://localhost:8011/embed.js`; for another address, change that line.
 
 ## What you can say
 
@@ -267,13 +268,13 @@ Be honest here: only list what was actually tested.
 .venv/bin/python -m unittest discover -s tests -t .
 ```
 
-The suite has 129 tests:
+The suite has 130 tests:
 
 - **Cart pricing and speech:** `test_cart.py`
 - **Safety rules** (`test_safety.py`): the everyday ways to say yes, and the replies that only sound like one; no capture without a fresh yes, a cart change voids the yes, refunds need their own yes, and the LLM output checks.
 - **30 spoken requests** (`tests/fixtures/utterances.json`) run against the offline parser, covering budgets, "double a", Romanian names, an over-budget case, out of stock, unclear requests and edits. `test_llm.py` also covers the Claude client against a mocked API.
 - **PayPal against a mocked API** (`test_paypal_mock.py`): the vault flow, the audit log, and the sandbox-only guard.
-- **Whole conversations** (`test_dialog.py`): link → buy → receipt → refund, plus the popup fallback, run through the HTTP API.
+- **Whole conversations** (`test_dialog.py`): link → buy → receipt → refund (and the refund the shop's page is told about), plus the popup fallback, run through the HTTP API.
 - **The newer features** (`test_features.py`): spending limit (including that a limit yes can't pay), reorder, order status and history, partial refunds with exact remainders, unlink, and product questions.
 - **PayPal not answering** (`test_paypal_mock.py`, `test_dialog.py`): retries reuse the same request id, the reply never claims nothing was charged, and a second yes can't create a second order.
 - **Merchant product feeds** (`test_feed.py`): the Shopify-style feed becomes products with the right names, prices, stock and delivery; unusable feeds are refused; loading by URL or file; and a whole voice purchase from the sample pharmacy feed.

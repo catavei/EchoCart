@@ -6,6 +6,7 @@
         const voice = EchoCart.mount(document.getElementById("voice"), {
           onCart(cart) { ... },         // after every reply: the cart, or null when it is empty
           onOrder(receipt) { ... },     // after a payment: order id, total, delivery date
+          onRefund(refund) { ... },     // after a refund: order id, this refund, refunded so far
         });
    3. Optional: your Add to basket buttons can fill the same cart, by the variant id in your feed:
         voice.add("4400101", "Ibuprofen 200 mg, 16 tablets");
@@ -18,7 +19,7 @@
   if (window.EchoCart) return;
   const ECHOCART = new URL(document.currentScript.src).origin;
 
-  function mount(container, { onCart = () => {}, onOrder = () => {} } = {}) {
+  function mount(container, { onCart = () => {}, onOrder = () => {}, onRefund = () => {} } = {}) {
     const frame = document.createElement("iframe");
     frame.title = "EchoCart voice checkout";
     frame.allow = "microphone";
@@ -35,6 +36,7 @@
       const m = event.data;
       if (!m || m.type !== "echocart:update") return;
       if (m.receipt) onOrder(m.receipt);
+      if (m.refund) onRefund(m.refund);
       onCart(m.cart || null);
       if (!ready) { ready = true; flush(); }   // EchoCart has started its conversation
     });

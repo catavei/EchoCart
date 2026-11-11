@@ -125,7 +125,8 @@
     $("cart").closest("section").hidden = true;   // the shop shows the basket itself
   }
   function tellShop(reply) {
-    if (shopKnown) parent.postMessage({ type: "echocart:update", cart: reply.cart || null, receipt: reply.receipt || null }, shopOrigin);
+    if (shopKnown) parent.postMessage({ type: "echocart:update", cart: reply.cart || null, receipt: reply.receipt || null,
+      refund: reply.refund || null }, shopOrigin);
   }
 
   function handleReply(reply) {

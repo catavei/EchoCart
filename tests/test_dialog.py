@@ -216,6 +216,15 @@ class RefundFlow(DialogBase):
         self.assertTrue(self.store.data.orders[0].refunded)
         self.assertIn("no order to refund", self.say("refund my last order").speech)
 
+    def test_refund_reply_tells_the_shop(self):
+        """The shop's page shows the refund on its order confirmation."""
+        self.buy()
+        self.say("refund my last order")
+        r = self.say("yes")
+        order_id = self.store.data.orders[0].order_id
+        self.assertEqual(r.refund, {"order_id": order_id, "amount_eur": "9.18", "refunded_eur": "9.18"})
+        self.assertIsNone(self.say("what's in my cart").refund)   # only on the reply that refunded
+
     def test_refund_no(self):
         self.buy()
         self.say("refund my last order")

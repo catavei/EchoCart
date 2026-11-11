@@ -7,7 +7,7 @@
   const $ = (id) => document.getElementById(id);
   const toggle = $("voice-toggle"), toggleLabel = $("voice-toggle-label"), panel = $("voice-panel"), slot = $("voice-slot");
   const basketBox = $("basket-box"), basket = $("basket"), basketSummary = $("basket-summary"), basketCount = $("basket-count");
-  const order = $("order"), orderText = $("order-text"), orderLines = $("order-lines");
+  const order = $("order"), orderText = $("order-text"), orderLines = $("order-lines"), orderRefund = $("order-refund");
   const productList = $("products"), pageTitle = $("page-title"), crumb = $("crumb-current"), productsCount = $("products-count");
   const search = $("search"), categoryList = $("categories"), brandFilters = $("brand-filters"), sort = $("sort");
   const eur = (v) => `€${Number(v).toFixed(2)}`;
@@ -216,7 +216,18 @@
     orderText.textContent = `Order ${receipt.order_id}. Paid ${eur(receipt.total_eur)} with PayPal. Arrives ${delivery}.`;
     orderLines.replaceChildren(...((lastCart && lastCart.lines) || []).map(
       (l) => el("li", "", `${l.name} × ${l.quantity}`)));
+    orderRefund.hidden = true;
+    shownOrder = receipt.order_id;
     order.hidden = false;
+  }
+
+  // A refund of the order on show: say how much went back.
+  let shownOrder = null;
+  function showRefund(refund) {
+    if (refund.order_id !== shownOrder) return;
+    orderRefund.textContent = `Refunded ${eur(refund.amount_eur)} to PayPal` +
+      (refund.refunded_eur !== refund.amount_eur ? ` (${eur(refund.refunded_eur)} in all).` : ".");
+    orderRefund.hidden = false;
   }
 
   // ---- EchoCart in the panel (embed.js) --------------------------------------
@@ -229,6 +240,7 @@
     }
     voice = window.EchoCart.mount(slot, {   // EchoCart starts when first opened
       onOrder(receipt) { showOrder(receipt); gotOrder = true; },
+      onRefund: showRefund,
       onCart(cart) {
         if (cart && !gotOrder) order.hidden = true;   // a new basket replaces the last confirmation
         gotOrder = false;

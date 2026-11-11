@@ -93,6 +93,7 @@ class Reply:
     receipt: dict | None = None
     pin_set: bool = False
     pin_over_eur: str | None = None    # payments above this ask for the PIN ("0" = every payment)
+    refund: dict | None = None         # after a refund: order id, this refund, refunded so far
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -663,8 +664,10 @@ class Conversation:
         ids = None if plan.whole_order else {l.product_id for l in plan.lines}
         self.store.record_refund(plan.order.order_id, refund.get("id"), plan.amount_eur, ids)
         when = "" if refund.get("status", "COMPLETED") == "COMPLETED" else " PayPal is still processing it."
+        so_far = next(o.refunded_eur for o in self.store.data.orders if o.order_id == plan.order.order_id)
+        done = {"order_id": plan.order.order_id, "amount_eur": str(plan.amount_eur), "refunded_eur": so_far}
         return self._say(f"Refund done. {say_eur(plan.amount_eur)} will go back to your PayPal account.{when}",
-                         priority="assertive", earcon="success")
+                         priority="assertive", earcon="success", refund=done)
 
     # ---- unlink ---------------------------------------------------------
     def _unlink_fp(self) -> str:

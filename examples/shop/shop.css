@@ -143,6 +143,7 @@ main:focus { outline: none; }
 .order h2 { margin-bottom: 0.3rem; }
 .order p { margin: 0 0 0.4rem; font-weight: 700; }
 .order-lines { margin: 0; padding-left: 1.2rem; }
+.order .order-refund { margin: 0.6rem -0.7rem 0; padding: 0.4rem 0.7rem; border: 3px solid var(--mark-edge); border-radius: 0.6rem; background: var(--mark); }
 .order-tick { width: 2.4rem; height: 2.4rem; flex: none; padding: 0.35rem; border-radius: 50%; background: var(--green); color: var(--green-ink); }
 .basket-lines { list-style: none; margin: 0; padding: 0; }
 .basket-lines li {
