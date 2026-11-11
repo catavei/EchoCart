@@ -122,12 +122,9 @@ python -m venv .venv
 
 **Hosted demo: <https://echocart-46wx.onrender.com>** (PayPal sandbox; no real money moves). Open it in Chrome or Edge.
 
-To pay, link PayPal with this sandbox **buyer** account when the PayPal window asks you to log in:
+To pay, you link PayPal once with a PayPal sandbox **personal** (buyer) account. Any sandbox personal account works: at [developer.paypal.com](https://developer.paypal.com/), open **Testing Tools > Sandbox Accounts** and use the Personal account's email and password when the PayPal window asks you to log in. Everything up to the payment works without one.
 
-- Email: `SANDBOX-BUYER-EMAIL`
-- Password: `SANDBOX-BUYER-PASSWORD`
-
-Then follow [First purchase](#4-first-purchase) from step 1.
+Then follow [First purchase](#4-first-purchase) from step 1. If speech recognition isn't available (Safari, Firefox) or the room is noisy, use the **Type instead** box: it works exactly like speaking.
 
 - **Your own shopper.** Each browser gets its own linked PayPal account, orders, spending limit and PIN, so several people can try the demo at the same time. Reloading the page keeps them; a private window starts afresh.
 - **The first visit can take about a minute** while the free server wakes up. A restart of the server also forgets the linked accounts, so you may be asked to link PayPal again.
