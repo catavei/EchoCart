@@ -12,7 +12,7 @@ Steps:
  3. exchange it for a payment token (vault_id)
  4. create an order with that vault_id and NO buyer interaction; capture if needed
  5. refund the capture
-It prints each response status so we can see whether PayPal asks for payer
+It prints each response status so you can see whether PayPal asks for payer
 action at step 4 (the thing the docs do not guarantee).
 """
 from __future__ import annotations

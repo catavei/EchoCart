@@ -24,7 +24,7 @@
 
 **[EDIT: in your own voice]** I've built literacy resources for visually impaired teenagers, and I watched how much of the web assumes you can see it. Online checkout is one of the worst cases. It's long, full of popups and totals that change, and at the most important moment, paying, it usually sends you to another page to find an "Approve" button.
 
-Voice assistants can fill a cart, but most of them still hand you to a visual payment page at the end, or they pay without telling you exactly what you're paying for. We wanted a checkout that a blind shopper could actually trust: you hear exactly what you're buying and what it costs, and money moves only when you clearly say yes.
+Voice assistants can fill a cart, but most of them still hand you to a visual payment page at the end, or they pay without telling you exactly what you're paying for. I wanted a checkout that a blind shopper could actually trust: you hear exactly what you're buying and what it costs, and money moves only when you clearly say yes.
 
 ## What it does
 
@@ -45,7 +45,7 @@ You link your PayPal account **once**, in a popup that EchoCart talks you throug
 
 **For merchants:** EchoCart is the voice checkout a shop adds for its blind and low-vision customers. Point it at the shop's product feed (the Shopify-style `products.json`) and the shop's own PayPal app, and the same voice checkout sells that shop's products. The repo includes a sample pharmacy feed and a demo shop page for it: a **Shop by voice** button opens EchoCart beside the products, and the shop's own basket and order confirmation follow the conversation.
 
-## How we built it
+## How I built it
 
 **PayPal (sandbox):**
 - **Vault v3 (payment method tokens).** A setup token is approved once by the shopper in a PayPal popup, then exchanged for a saved payment token. This is what removes the visual approval step from every later purchase.
@@ -86,7 +86,7 @@ The safety rules are enforced in code, not left to the AI's instructions:
 - **The spending limit is checked twice:** an over-limit cart is never offered for a yes, and the payment step checks again.
 - **A second order can't be created** while one is waiting for approval in the fallback popup.
 - **The optional PIN is a second step, never a shortcut.** It only completes a valid yes. Saying anything else cancels it, and three wrong tries lock payments and account changes for 10 minutes. It's stored as a salted scrypt hash and goes to its own endpoint, so it never reaches the conversation, the speech engine or the logs.
-- **When PayPal doesn't answer**, EchoCart doesn't pretend nothing happened. It says it can't tell yet, and paying the same cart again reuses the same PayPal request id, so PayPal returns the first order instead of charging twice. We found this case in a real sandbox run, where one create took over 30 seconds.
+- **When PayPal doesn't answer**, EchoCart doesn't pretend nothing happened. It says it can't tell yet, and paying the same cart again reuses the same PayPal request id, so PayPal returns the first order instead of charging twice. I found this case in a real sandbox run, where one create took over 30 seconds.
 
 These rules are covered by 130 automated tests, including 30 recorded-style utterances: budgets, misheard words, Romanian names, an over-budget case, out of stock, and edits.
 
@@ -106,22 +106,22 @@ These rules are covered by 130 automated tests, including 30 recorded-style utte
 - **A typing box is always there**, for browsers without speech recognition (like Safari) and for noisy rooms.
 - **Screen-reader testing:** **[EDIT: fill in from the README testing log after you test with NVDA and VoiceOver. Don't claim anything you didn't test.]**
 
-## Challenges we ran into
+## Challenges I ran into
 
-- **The approval page problem.** Standard PayPal checkout sends the buyer to a login and approval page, which breaks a voice-only flow. We checked PayPal's documentation for saving a PayPal account (vaulting) for returning buyers, and confirmed the one-time setup flow and the server-side order with `vault_id`. Then we built a fallback for when Vault isn't available.
+- **The approval page problem.** Standard PayPal checkout sends the buyer to a login and approval page, which breaks a voice-only flow. I checked PayPal's documentation for saving a PayPal account (vaulting) for returning buyers, and confirmed the one-time setup flow and the server-side order with `vault_id`. Then I built a fallback for when Vault isn't available.
 - **Popups and accessibility.** Browsers block a popup opened by a voice command, because it isn't a user gesture. The fix: EchoCart says "press Enter" and moves focus to the button, so the key press opens the window.
-- **Trust versus convenience.** It's tempting to accept "yeah" or "sure". We chose a strict rule, and made the error message re-read the total so a strict yes is never confusing.
-- **One currency, said once.** We first priced in Romanian lei and charged in euros, because PayPal REST doesn't support lei. Hearing every total twice made each read-back longer and harder to follow, so the shop now prices in euros only.
+- **Trust versus convenience.** People say yes in many ways, so EchoCart accepts the everyday ones ("yeah, go ahead", "sure"). But the whole reply has to be agreement, straight after the total, so "yeah, wait" never pays. Anything else re-reads the total, so the rule is never confusing.
+- **One currency, said once.** I first priced in Romanian lei and charged in euros, because PayPal REST doesn't support lei. Hearing every total twice made each read-back longer and harder to follow, so the shop now prices in euros only.
 - **Proving the vault path on the real sandbox before building on it.** A standalone script links a sandbox buyer, pays 1.00 EUR with the saved account and refunds it. The vaulted order came back `COMPLETED` directly from create, with no approval page and no separate capture call. **[EDIT: add anything else that came up.]**
 
-## Accomplishments that we're proud of
+## Accomplishments that I'm proud of
 
 - **A complete purchase, edit and refund with the screen off.**
 - **Safety rules that are tested code, not prompt text.**
 - **The AI can't invent a price**, because all money is computed by the backend from the catalogue.
 - **It runs with one command**, and works without an AI key thanks to the offline parser.
 
-## What we learned
+## What I learned
 
 **[EDIT]** For example:
 - Designing for speech means designing the *sentences*: the order of information, money said the way people say it ("9 euros 18 cents"), and when to stay quiet.
@@ -129,9 +129,9 @@ These rules are covered by 130 automated tests, including 30 recorded-style utte
 
 ## What's next
 
-- **Testing with blind and low-vision shoppers**, and changing the wording and pacing based on what they tell us.
+- **Testing with blind and low-vision shoppers**, and changing the wording and pacing based on what they tell me.
 - **More shop platforms:** WooCommerce and Google Merchant Center feeds next to Shopify's, live stock updates instead of reading the feed once, and delivery slots.
-- **Marketplaces without PayPal checkout, such as Amazon,** would need a browser extension that reads the page and only presses the real checkout button after a spoken yes. We left that out of this demo because it can't run on the sandbox.
+- **Marketplaces without PayPal checkout, such as Amazon,** would need a browser extension that reads the page and only presses the real checkout button after a spoken yes. I left that out of this demo because it can't run on the sandbox.
 - **Fraud-prevention data and production vetting** for saved PayPal accounts.
 - **Real delivery tracking** through PayPal's shipment tracking API, replacing the delivery estimate.
 - **Passkeys** (Windows Hello, Face ID, fingerprint) as an alternative to the PIN: nothing to remember, nothing to overhear.
