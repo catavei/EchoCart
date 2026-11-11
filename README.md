@@ -56,6 +56,16 @@ EchoCart is designed around three things a blind shopper needs to trust a paymen
 | Every create, capture and refund is logged with a timestamp and order id | `data/payments.jsonl` (`paypal_client.PaymentLog`) |
 | The app refuses to start unless the PayPal URL is the sandbox one | `config.Settings.assert_sandbox`, plus a second check in `PayPalClient` |
 
+### Built with
+
+- **PayPal developer platform, sandbox only:** Vault v3 (setup tokens, payment tokens, delete), Orders v2 (create and capture with the saved account), Payments v2 (full and partial refunds), standard PayPal checkout as the fallback, and OAuth 2.0 client credentials.
+- **AI: Anthropic Claude** through the Messages API (Claude Opus 5.5 by default, set with `ANTHROPIC_MODEL`), with JSON-schema output: it turns what the shopper says into product ids and quantities, never prices. A built-in offline parser does the same job with no API key; the hosted demo and the demo video use it.
+- **Render (sponsor):** hosts the [live demo](https://echocart-46wx.onrender.com) from [`render.yaml`](render.yaml). See [Hosting it on Render](#hosting-it-on-render).
+- **Backend:** Python 3.12, FastAPI, httpx, pydantic, uvicorn. Docker Compose to run it.
+- **Frontend:** plain HTML, CSS and JavaScript; the Web Speech API for recognition and speech; the Web Audio API for the earcons; ARIA live regions. `embed.js` for shop websites.
+- **Demo video:** recorded automatically from the live app in Chromium (through the DevTools protocol), against the real PayPal sandbox. The voices are by **ElevenLabs**; the app itself doesn't use ElevenLabs.
+- **Development:** built with help from **Claude Code** (Anthropic).
+
 ---
 
 ## Setup (about 5 minutes)
